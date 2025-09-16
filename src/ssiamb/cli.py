@@ -178,6 +178,24 @@ def self(
             "--emit-bed", help="Emit BED file with ambiguous sites"
         ),
     ] = False,
+    emit_matrix: Annotated[
+        bool,
+        typer.Option(
+            "--emit-matrix", help="Emit variant matrix in TSV format"
+        ),
+    ] = False,
+    emit_per_contig: Annotated[
+        bool,
+        typer.Option(
+            "--emit-per-contig", help="Emit per-contig summary statistics"
+        ),
+    ] = False,
+    emit_multiqc: Annotated[
+        bool,
+        typer.Option(
+            "--emit-multiqc", help="Emit MultiQC-compatible metrics"
+        ),
+    ] = False,
     stdout: Annotated[
         bool,
         typer.Option(
@@ -192,6 +210,11 @@ def self(
     where the assembly may not represent the true sequence.
     """
     try:
+        # Validate emit flags with stdout
+        if stdout and any([emit_vcf, emit_bed, emit_matrix, emit_per_contig, emit_multiqc]):
+            console.print("[red]Error: --stdout cannot be used with --emit-* flags[/red]")
+            raise typer.Exit(1)
+        
         # Get global options from context
         dry_run = ctx.parent.params.get("dry_run", False) if ctx.parent else False
         
@@ -213,6 +236,9 @@ def self(
             to_stdout=stdout,
             emit_vcf=emit_vcf,
             emit_bed=emit_bed,
+            emit_matrix=emit_matrix,
+            emit_per_contig=emit_per_contig,
+            emit_multiqc=emit_multiqc,
         )
         
         # Execute plan
@@ -332,6 +358,24 @@ def ref(
             "--emit-bed", help="Emit BED file with ambiguous sites"
         ),
     ] = False,
+    emit_matrix: Annotated[
+        bool,
+        typer.Option(
+            "--emit-matrix", help="Emit variant matrix in TSV format"
+        ),
+    ] = False,
+    emit_per_contig: Annotated[
+        bool,
+        typer.Option(
+            "--emit-per-contig", help="Emit per-contig summary statistics"
+        ),
+    ] = False,
+    emit_multiqc: Annotated[
+        bool,
+        typer.Option(
+            "--emit-multiqc", help="Emit MultiQC-compatible metrics"
+        ),
+    ] = False,
     stdout: Annotated[
         bool,
         typer.Option(
@@ -346,6 +390,11 @@ def ref(
     Reference can be provided directly, looked up by species, or selected from Bracken.
     """
     try:
+        # Validate emit flags with stdout
+        if stdout and any([emit_vcf, emit_bed, emit_matrix, emit_per_contig, emit_multiqc]):
+            console.print("[red]Error: --stdout cannot be used with --emit-* flags[/red]")
+            raise typer.Exit(1)
+        
         # Get global options from context
         dry_run = ctx.parent.params.get("dry_run", False) if ctx.parent else False
         
@@ -367,6 +416,9 @@ def ref(
             to_stdout=stdout,
             emit_vcf=emit_vcf,
             emit_bed=emit_bed,
+            emit_matrix=emit_matrix,
+            emit_per_contig=emit_per_contig,
+            emit_multiqc=emit_multiqc,
             species=species,
             bracken=bracken,
             ref_dir=ref_dir,

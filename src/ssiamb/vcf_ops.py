@@ -780,3 +780,274 @@ def emit_bed(
         error_msg = f"BED emission failed: {str(e)}"
         logger.error(error_msg)
         raise VCFOperationError(error_msg) from e
+
+
+def emit_matrix(
+    grid: AmbigGrid,
+    output_path: Path,
+    sample_name: str
+) -> Path:
+    """
+    Emit variant matrix as compressed TSV.
+    
+    Args:
+        grid: Populated AmbigGrid with variant counts
+        output_path: Output path (will be ensured to end with .tsv.gz)
+        sample_name: Sample name for logging
+        
+    Returns:
+        Path to compressed matrix file
+        
+    Raises:
+        VCFOperationError: If matrix emission fails
+    """
+    try:
+        # Ensure output path has .tsv.gz extension
+        if not str(output_path).endswith('.tsv.gz'):
+            output_path = output_path.with_suffix('.tsv.gz')
+            
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write to temporary uncompressed file first
+        temp_tsv = output_path.with_suffix('.tsv')
+        grid.to_wide_tsv(temp_tsv)
+        
+        # Compress with gzip
+        import gzip
+        with open(temp_tsv, 'rb') as f_in:
+            with gzip.open(output_path, 'wb') as f_out:
+                f_out.write(f_in.read())
+                
+        # Remove temporary file
+        temp_tsv.unlink()
+        
+        logger.info(f"Emitted variant matrix for {sample_name}: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        error_msg = f"Matrix emission failed: {str(e)}"
+        logger.error(error_msg)
+        raise VCFOperationError(error_msg) from e
+
+
+def emit_per_contig(
+    normalized_vcf_path: Path,
+    depth_summary_path: Path,
+    output_path: Path,
+    dp_min: int,
+    maf_min: float,
+    sample_name: str,
+    included_contigs: Optional[Set[str]] = None
+) -> Path:
+    """
+    Emit per-contig summary statistics.
+    
+    Args:
+        normalized_vcf_path: Path to normalized VCF file
+        depth_summary_path: Path to mosdepth summary file
+        output_path: Output TSV path
+        dp_min: Minimum depth threshold
+        maf_min: Minimum MAF threshold
+        sample_name: Sample name
+        included_contigs: Set of contigs to include
+        
+    Returns:
+        Path to per-contig summary file
+        
+    Raises:
+        VCFOperationError: If emission fails
+    """
+    try:
+        from .depth import parse_mosdepth_summary
+        
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Parse depth summary for contig-level stats
+        depth_summary = parse_mosdepth_summary(depth_summary_path)
+        
+        # Count variants per contig
+        contig_variant_counts = {}
+        
+        with pysam.VariantFile(str(normalized_vcf_path)) as vcf:
+            for record in vcf:
+                # Filter by included contigs
+                if included_contigs is not None and record.chrom not in included_contigs:
+                    continue
+                    
+                # Skip if no ALT alleles
+                if not record.alts:
+                    continue
+                    
+                # Initialize contig counts if needed
+                if record.chrom not in contig_variant_counts:
+                    contig_variant_counts[record.chrom] = {
+                        'snv': 0,
+                        'indel': 0,
+                        'del': 0
+                    }
+                
+                # Process each ALT allele
+                for alt_allele in record.alts:
+                    if record.ref is None or alt_allele is None:
+                        continue
+                        
+                    variant_class = classify_variant(record.ref, alt_allele)
+                    
+                    if variant_class == VariantClass.UNKNOWN:
+                        continue
+                        
+                    # Extract MAF and depth
+                    maf = extract_maf_from_record(record)
+                    if maf is None:
+                        continue
+                        
+                    # Get depth
+                    depth = 0
+                    if "DP" in record.info:
+                        depth = record.info["DP"]
+                    elif "AD" in record.format:
+                        samples = list(record.samples)
+                        if samples:
+                            sample = record.samples[samples[0]]
+                            ad = sample.get("AD")
+                            if ad is not None:
+                                depth = sum(ad)
+                    
+                    # Check if passes thresholds
+                    if depth >= dp_min and maf >= maf_min:
+                        if variant_class == VariantClass.SNV:
+                            contig_variant_counts[record.chrom]['snv'] += 1
+                        elif variant_class == VariantClass.INS:
+                            contig_variant_counts[record.chrom]['indel'] += 1
+                        elif variant_class == VariantClass.DEL:
+                            contig_variant_counts[record.chrom]['del'] += 1
+        
+        # Write per-contig summary
+        with open(output_path, 'w') as f:
+            # Write header
+            header = [
+                "sample", "contig", "length", "callable_bases_10x", "breadth_10x",
+                "ambiguous_snv_count", "ambiguous_indel_count", "ambiguous_del_count",
+                "ambiguous_snv_per_mb", "mean_depth"
+            ]
+            f.write('\t'.join(header) + '\n')
+            
+            # Write data for each contig in depth summary
+            for contig_stat in depth_summary.contig_stats:
+                contig_name = contig_stat.name
+                length = contig_stat.length
+                callable_bases = contig_stat.bases_covered
+                mean_depth = contig_stat.mean_depth
+                breadth_10x = contig_stat.breadth_10x
+                
+                # Get variant counts for this contig
+                counts = contig_variant_counts.get(contig_name, {'snv': 0, 'indel': 0, 'del': 0})
+                snv_count = counts['snv']
+                indel_count = counts['indel']
+                del_count = counts['del']
+                
+                # Calculate SNV per Mb
+                snv_per_mb = (snv_count * 1_000_000) / length if length > 0 else 0.0
+                
+                row = [
+                    sample_name,
+                    contig_name,
+                    str(length),
+                    str(callable_bases),
+                    f"{breadth_10x:.4f}",
+                    str(snv_count),
+                    str(indel_count),
+                    str(del_count),
+                    f"{snv_per_mb:.2f}",
+                    f"{mean_depth:.2f}"
+                ]
+                f.write('\t'.join(row) + '\n')
+        
+        logger.info(f"Emitted per-contig summary for {sample_name}: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        error_msg = f"Per-contig summary emission failed: {str(e)}"
+        logger.error(error_msg)
+        raise VCFOperationError(error_msg) from e
+
+
+def emit_multiqc(
+    sample_name: str,
+    ambiguous_snv_count: int,
+    breadth_10x: float,
+    callable_bases: int,
+    genome_length: int,
+    dp_min: int,
+    maf_min: float,
+    mapper: str,
+    caller: str,
+    mode: str,
+    output_path: Path
+) -> Path:
+    """
+    Emit MultiQC-compatible metrics TSV.
+    
+    As per spec.md §4.6: sample, ambiguous_snv_count, ambiguous_snv_per_mb, breadth_10x, 
+    callable_bases, genome_length, dp_min, maf_min, mapper, caller, mode
+    
+    Args:
+        sample_name: Sample identifier
+        ambiguous_snv_count: Count of ambiguous SNVs 
+        breadth_10x: Fraction of genome with ≥10x coverage
+        callable_bases: Number of callable bases
+        genome_length: Total genome length
+        dp_min: Minimum depth threshold used
+        maf_min: Minimum MAF threshold used
+        mapper: Mapper tool name
+        caller: Caller tool name
+        mode: Analysis mode (self or ref)
+        output_path: Output path (will be ensured to end with .tsv)
+        
+    Returns:
+        Path to emitted MultiQC TSV file
+        
+    Raises:
+        VCFOperationError: If MultiQC emission fails
+    """
+    try:
+        # Ensure output path has .tsv extension
+        if not str(output_path).endswith('.tsv'):
+            output_path = output_path.with_suffix('.tsv')
+            
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Calculate ambiguous SNVs per megabase
+        ambiguous_snv_per_mb = (ambiguous_snv_count * 1_000_000) / genome_length if genome_length > 0 else 0.0
+        
+        with open(output_path, 'w') as f:
+            # Write header
+            header = [
+                "sample", "ambiguous_snv_count", "ambiguous_snv_per_mb", "breadth_10x",
+                "callable_bases", "genome_length", "dp_min", "maf_min", "mapper", "caller", "mode"
+            ]
+            f.write('\t'.join(header) + '\n')
+            
+            # Write data row
+            row = [
+                sample_name,
+                str(ambiguous_snv_count),
+                f"{ambiguous_snv_per_mb:.2f}",
+                f"{breadth_10x:.4f}",
+                str(callable_bases),
+                str(genome_length),
+                str(dp_min),
+                f"{maf_min:.3f}",
+                mapper,
+                caller,
+                mode
+            ]
+            f.write('\t'.join(row) + '\n')
+        
+        logger.info(f"Emitted MultiQC metrics for {sample_name}: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        error_msg = f"MultiQC emission failed: {str(e)}"
+        logger.error(error_msg)
+        raise VCFOperationError(error_msg) from e

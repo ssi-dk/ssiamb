@@ -33,8 +33,10 @@ from .calling import (
 )
 from .vcf_ops import (
     normalize_and_split, count_ambiguous_sites, VCFOperationError,
-    VariantClass, check_vcf_tools, emit_vcf, emit_bed
+    VariantClass, check_vcf_tools, emit_vcf, emit_bed, emit_matrix, emit_per_contig, emit_multiqc
 )
+from .mapping import calculate_mapping_rate
+from .reuse import has_duplicate_flags, run_markdup_for_depth, CompatibilityError
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,9 @@ def create_run_plan(
     to_stdout: bool = False,
     emit_vcf: bool = False,
     emit_bed: bool = False,
+    emit_matrix: bool = False,
+    emit_per_contig: bool = False,
+    emit_multiqc: bool = False,
     **kwargs,
 ) -> RunPlan:
     """
@@ -146,10 +151,10 @@ def create_run_plan(
         # Extract output flags
         emit_vcf=emit_vcf,
         emit_bed=emit_bed,
-        emit_matrix=kwargs.get("emit_matrix", False),
-        emit_per_contig=kwargs.get("emit_per_contig", False),
+        emit_matrix=emit_matrix,
+        emit_per_contig=emit_per_contig,
         emit_provenance=kwargs.get("emit_provenance", False),
-        emit_multiqc=kwargs.get("emit_multiqc", False),
+        emit_multiqc=emit_multiqc,
     )
     
     logger.info(f"Created run plan for {mode.value} mode, sample {sample}")
@@ -249,14 +254,36 @@ def run_self(plan: RunPlan) -> SummaryRow:
         
         logger.info(f"Mapping completed: {bam_path}")
         
-        # Step 3: Run depth analysis using mosdepth
+        # Calculate mapping rate from BAM statistics
+        try:
+            mapping_rate = calculate_mapping_rate(bam_path)
+            logger.info(f"Mapping rate: {mapping_rate:.4f}")
+        except (MappingError, ExternalToolError) as e:
+            logger.warning(f"Could not calculate mapping rate: {e}")
+            mapping_rate = 0.0  # Use fallback value
+        
+        # Step 3: Check for duplicates and run markdup if needed
+        logger.info("Checking for duplicate flags in BAM")
+        final_bam_path = bam_path
+        try:
+            if not has_duplicate_flags(bam_path):
+                logger.info("No duplicate flags detected, running samtools markdup for depth analysis")
+                final_bam_path = run_markdup_for_depth(bam_path, plan.paths.output_dir)
+            else:
+                logger.info("Duplicate flags already present")
+        except CompatibilityError as e:
+            logger.warning(f"Could not check/mark duplicates: {e}")
+            # Continue with original BAM file
+            final_bam_path = bam_path
+        
+        # Step 4: Run depth analysis using mosdepth
         logger.info("Running depth analysis with mosdepth")
         try:
             # Ensure thresholds are properly initialized
             assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
             
             depth_summary = analyze_depth(
-                bam_path=bam_path,
+                bam_path=final_bam_path,  # Use markdup BAM if created
                 output_dir=plan.paths.output_dir,
                 sample_name=plan.sample,
                 mapq_threshold=plan.thresholds.mapq_min,  # Use CLI/config MAPQ threshold
@@ -271,7 +298,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
             depth_summary = None
             qc_warnings = f"depth_analysis_failed:{e}"
         
-        # Step 4: Run variant calling
+        # Step 5: Run variant calling
         logger.info(f"Running variant calling with {plan.caller.value}")
         try:
             # Ensure thresholds are properly initialized
@@ -280,7 +307,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
             
             vcf_path = plan.paths.output_dir / f"{plan.sample}.vcf"
             variant_result = call_variants(
-                bam_path=bam_path,
+                bam_path=bam_path,  # Use original BAM for variant calling (not markdup)
                 reference_path=plan.paths.assembly,
                 output_vcf=vcf_path,
                 caller=plan.caller,
@@ -362,6 +389,29 @@ def run_self(plan: RunPlan) -> SummaryRow:
                     included_contigs=included_contigs
                 )
             
+            if plan.emit_matrix:
+                matrix_output_path = plan.paths.output_dir / f"{plan.sample}.ambiguity_matrix.tsv.gz"
+                logger.info(f"Emitting ambiguity matrix to {matrix_output_path}")
+                emit_matrix(
+                    grid=grid,
+                    output_path=matrix_output_path,
+                    sample_name=plan.sample
+                )
+            
+            if plan.emit_per_contig:
+                per_contig_output_path = plan.paths.output_dir / f"{plan.sample}.per_contig.tsv"
+                logger.info(f"Emitting per-contig summary to {per_contig_output_path}")
+                mosdepth_summary = plan.paths.output_dir / f"{plan.sample}.mosdepth.summary.txt"
+                emit_per_contig(
+                    depth_summary_path=mosdepth_summary,
+                    normalized_vcf_path=normalized_vcf_path,
+                    output_path=per_contig_output_path,
+                    dp_min=plan.thresholds.dp_min,
+                    maf_min=plan.thresholds.maf_min,
+                    sample_name=plan.sample,
+                    included_contigs=included_contigs
+                )
+            
         except VCFOperationError as e:
             logger.error(f"VCF analysis failed: {e}")
             # Use placeholder values if VCF analysis fails
@@ -398,6 +448,24 @@ def run_self(plan: RunPlan) -> SummaryRow:
         # Calculate ref_calls (sites that are reference-like, i.e., not variant)
         ref_calls = callable_bases - all_variants_count if callable_bases > all_variants_count else 0
         
+        # Emit MultiQC metrics if requested
+        if plan.emit_multiqc:
+            multiqc_output_path = plan.paths.output_dir / f"{plan.sample}.multiqc.tsv"
+            logger.info(f"Emitting MultiQC metrics to {multiqc_output_path}")
+            emit_multiqc(
+                sample_name=plan.sample,
+                ambiguous_snv_count=ambiguous_snv_count,
+                breadth_10x=breadth_10x,
+                callable_bases=callable_bases,
+                genome_length=genome_length,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                mapper=plan.mapper.value,
+                caller=plan.caller.value,
+                mode=plan.mode.value,
+                output_path=multiqc_output_path
+            )
+        
         return SummaryRow(
             sample=plan.sample,
             mode=plan.mode.value,
@@ -410,7 +478,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
             genome_length=genome_length,
             breadth_10x=breadth_10x,
             mean_depth=mean_depth,
-            mapping_rate=0.98,       # TODO: Calculate from BAM stats
+            mapping_rate=mapping_rate,       # Calculated from BAM stats
             ambiguous_sites=ambiguous_snv_count,
             ref_calls=ref_calls,
             alt_calls=all_variants_count,
@@ -672,14 +740,36 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         
         logger.info(f"Mapping completed: {bam_path}")
         
-        # Step 2: Run depth analysis using mosdepth
+        # Calculate mapping rate from BAM statistics
+        try:
+            mapping_rate = calculate_mapping_rate(bam_path)
+            logger.info(f"Mapping rate: {mapping_rate:.4f}")
+        except (MappingError, ExternalToolError) as e:
+            logger.warning(f"Could not calculate mapping rate: {e}")
+            mapping_rate = 0.0  # Use fallback value
+        
+        # Step 2: Check for duplicates and run markdup if needed
+        logger.info("Checking for duplicate flags in BAM")
+        final_bam_path = bam_path
+        try:
+            if not has_duplicate_flags(bam_path):
+                logger.info("No duplicate flags detected, running samtools markdup for depth analysis")
+                final_bam_path = run_markdup_for_depth(bam_path, plan.paths.output_dir)
+            else:
+                logger.info("Duplicate flags already present")
+        except CompatibilityError as e:
+            logger.warning(f"Could not check/mark duplicates: {e}")
+            # Continue with original BAM file
+            final_bam_path = bam_path
+        
+        # Step 3: Run depth analysis using mosdepth
         logger.info("Running depth analysis with mosdepth")
         try:
             # Ensure thresholds are properly initialized
             assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
             
             depth_summary = analyze_depth(
-                bam_path=bam_path,
+                bam_path=final_bam_path,  # Use markdup BAM if created
                 output_dir=plan.paths.output_dir,
                 sample_name=plan.sample,
                 mapq_threshold=plan.thresholds.mapq_min,  # Use CLI/config MAPQ threshold
@@ -694,7 +784,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             depth_summary = None
             qc_warnings = f"depth_analysis_failed:{e}"
         
-        # Step 3: Run variant calling
+        # Step 4: Run variant calling
         logger.info(f"Running variant calling with {plan.caller.value}")
         try:
             # Ensure thresholds are properly initialized
@@ -785,6 +875,29 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                     included_contigs=included_contigs
                 )
             
+            if plan.emit_matrix:
+                matrix_output_path = plan.paths.output_dir / f"{plan.sample}.ambiguity_matrix.tsv.gz"
+                logger.info(f"Emitting ambiguity matrix to {matrix_output_path}")
+                emit_matrix(
+                    grid=grid,
+                    output_path=matrix_output_path,
+                    sample_name=plan.sample
+                )
+            
+            if plan.emit_per_contig:
+                per_contig_output_path = plan.paths.output_dir / f"{plan.sample}.per_contig.tsv"
+                logger.info(f"Emitting per-contig summary to {per_contig_output_path}")
+                mosdepth_summary = plan.paths.output_dir / f"{plan.sample}.mosdepth.summary.txt"
+                emit_per_contig(
+                    depth_summary_path=mosdepth_summary,
+                    normalized_vcf_path=normalized_vcf_path,
+                    output_path=per_contig_output_path,
+                    dp_min=plan.thresholds.dp_min,
+                    maf_min=plan.thresholds.maf_min,
+                    sample_name=plan.sample,
+                    included_contigs=included_contigs
+                )
+            
         except VCFOperationError as e:
             logger.error(f"VCF analysis failed: {e}")
             # Use placeholder values if VCF analysis fails
@@ -821,6 +934,24 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         # Calculate ref_calls (sites that are reference-like, i.e., not variant)
         ref_calls = callable_bases - all_variants_count if callable_bases > all_variants_count else 0
         
+        # Emit MultiQC metrics if requested
+        if plan.emit_multiqc:
+            multiqc_output_path = plan.paths.output_dir / f"{plan.sample}.multiqc.tsv"
+            logger.info(f"Emitting MultiQC metrics to {multiqc_output_path}")
+            emit_multiqc(
+                sample_name=plan.sample,
+                ambiguous_snv_count=ambiguous_snv_count,
+                breadth_10x=breadth_10x,
+                callable_bases=callable_bases,
+                genome_length=genome_length,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                mapper=plan.mapper.value,
+                caller=plan.caller.value,
+                mode=plan.mode.value,
+                output_path=multiqc_output_path
+            )
+        
         return SummaryRow(
             sample=plan.sample,
             mode=plan.mode.value,
@@ -833,7 +964,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             genome_length=genome_length,
             breadth_10x=breadth_10x,
             mean_depth=mean_depth,
-            mapping_rate=0.95,       # TODO: Calculate from BAM stats
+            mapping_rate=mapping_rate,       # Calculated from BAM stats
             ambiguous_sites=ambiguous_snv_count,
             ref_calls=ref_calls,
             alt_calls=all_variants_count,

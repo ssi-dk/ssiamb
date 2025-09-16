@@ -25,7 +25,10 @@ from src.ssiamb.vcf_ops import (
     SiteRecord,
     check_vcf_tools,
     emit_vcf,
-    emit_bed
+    emit_bed,
+    emit_matrix,
+    emit_per_contig,
+    emit_multiqc
 )
 
 
@@ -643,6 +646,194 @@ class TestEmitterIntegration:
                     included_contigs=set()
                 )
                 assert str(result).endswith('.bed.gz')
+
+
+class TestMatrixEmitter:
+    """Test matrix emitter functionality."""
+    
+    def test_emit_matrix_basic(self):
+        """Test basic matrix emission with gzip compression."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create a simple AmbigGrid
+            grid = AmbigGrid(dp_cap=100)
+            # Add some test data
+            grid.add_site(20, 0.3)
+            grid.add_site(15, 0.2)
+            
+            output_path = tmpdir / "test_matrix.tsv"
+            
+            result = emit_matrix(
+                grid=grid,
+                output_path=output_path,
+                sample_name="test_sample"
+            )
+            
+            # Check that .tsv.gz extension was added
+            assert str(result).endswith('.tsv.gz')
+            assert result.exists()
+            
+            # Check that file is gzip compressed
+            with gzip.open(result, 'rt') as f:
+                content = f.read()
+                assert 'depth' in content  # Should have header
+                assert len(content.strip().split('\n')) > 1  # Should have data
+    
+    def test_emit_matrix_path_handling(self):
+        """Test matrix emitter path handling."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            grid = AmbigGrid(dp_cap=10)
+            
+            # Test without .tsv.gz extension
+            output_path = tmpdir / "matrix"
+            result = emit_matrix(grid=grid, output_path=output_path, sample_name="test")
+            assert str(result).endswith('.tsv.gz')
+            
+            # Test with .tsv extension only
+            output_path = tmpdir / "matrix.tsv"
+            result = emit_matrix(grid=grid, output_path=output_path, sample_name="test")
+            assert str(result).endswith('.tsv.gz')
+
+
+class TestPerContigEmitter:
+    """Test per-contig emitter functionality."""
+    
+    def test_emit_per_contig_basic(self):
+        """Test basic per-contig emission."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create mock depth summary file
+            depth_summary = tmpdir / "test.mosdepth.summary.txt"
+            depth_summary.write_text(
+                "chrom\tlength\tbases\tmean\tmin\tmax\n"
+                "contig1\t1000\t950\t25.5\t0\t100\n"
+                "contig2\t2000\t1800\t30.2\t0\t120\n"
+                "total\t3000\t2750\t27.8\t0\t120\n"
+            )
+            
+            # Create mock VCF file
+            vcf_content = """##fileformat=VCFv4.2
+##contig=<ID=contig1,length=1000>
+##contig=<ID=contig2,length=2000>
+#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\ttest_sample
+contig1\t100\t.\tA\tT\t60\tPASS\tDP=20\tGT:DP:AD\t0/1:20:10,10
+contig1\t200\t.\tG\tC\t70\tPASS\tDP=25\tGT:DP:AD\t0/1:25:12,13
+contig2\t500\t.\tC\tA\t80\tPASS\tDP=30\tGT:DP:AD\t0/1:30:15,15
+"""
+            vcf_file = tmpdir / "test.vcf"
+            vcf_file.write_text(vcf_content)
+            
+            output_path = tmpdir / "per_contig.tsv"
+            
+            result = emit_per_contig(
+                normalized_vcf_path=vcf_file,
+                depth_summary_path=depth_summary,
+                output_path=output_path,
+                dp_min=10,
+                maf_min=0.1,
+                sample_name="test_sample",
+                included_contigs={"contig1", "contig2"}
+            )
+            
+            assert result.exists()
+            
+            # Check content structure
+            content = result.read_text()
+            lines = content.strip().split('\n')
+            assert len(lines) >= 2  # Header + at least one data row
+            
+            # Check header
+            header = lines[0].split('\t')
+            expected_fields = [
+                'sample', 'contig', 'length', 'callable_bases_10x', 'breadth_10x',
+                'ambiguous_snv_count', 'ambiguous_indel_count', 'ambiguous_del_count',
+                'ambiguous_snv_per_mb', 'mean_depth'
+            ]
+            assert header == expected_fields
+
+
+class TestMultiQCEmitter:
+    """Test MultiQC emitter functionality."""
+    
+    def test_emit_multiqc_basic(self):
+        """Test basic MultiQC emission."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            output_path = tmpdir / "multiqc.tsv"
+            
+            result = emit_multiqc(
+                sample_name="test_sample",
+                ambiguous_snv_count=42,
+                breadth_10x=0.85,
+                callable_bases=1500000,
+                genome_length=2000000,
+                dp_min=10,
+                maf_min=0.1,
+                mapper="minimap2",
+                caller="bbtools",
+                mode="self",
+                output_path=output_path
+            )
+            
+            assert result.exists()
+            assert str(result).endswith('.tsv')
+            
+            # Check content structure
+            content = result.read_text()
+            lines = content.strip().split('\n')
+            assert len(lines) == 2  # Header + one data row
+            
+            # Check header
+            header = lines[0].split('\t')
+            expected_fields = [
+                'sample', 'ambiguous_snv_count', 'ambiguous_snv_per_mb', 'breadth_10x',
+                'callable_bases', 'genome_length', 'dp_min', 'maf_min', 'mapper', 'caller', 'mode'
+            ]
+            assert header == expected_fields
+            
+            # Check data values
+            data = lines[1].split('\t')
+            assert data[0] == "test_sample"
+            assert data[1] == "42"
+            assert data[4] == "1500000"
+            assert data[5] == "2000000"
+            assert data[8] == "minimap2"
+            assert data[9] == "bbtools"
+            assert data[10] == "self"
+    
+    def test_emit_multiqc_snv_per_mb_calculation(self):
+        """Test SNV per megabase calculation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            output_path = tmpdir / "multiqc.tsv"
+            
+            result = emit_multiqc(
+                sample_name="test",
+                ambiguous_snv_count=100,
+                breadth_10x=0.9,
+                callable_bases=1000000,
+                genome_length=2000000,  # 2 Mb
+                dp_min=15,
+                maf_min=0.05,
+                mapper="bwa-mem2",
+                caller="bcftools",
+                mode="ref",
+                output_path=output_path
+            )
+            
+            content = result.read_text()
+            lines = content.strip().split('\n')
+            data = lines[1].split('\t')
+            
+            # SNV per Mb should be 100 * 1,000,000 / 2,000,000 = 50.00
+            snv_per_mb = float(data[2])
+            assert abs(snv_per_mb - 50.0) < 0.01
 
 
 if __name__ == "__main__":

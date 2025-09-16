@@ -397,3 +397,72 @@ def _map_with_bwa_mem2(
             samtools_cmd,
             stderr=samtools_stderr
         )
+
+
+def calculate_mapping_rate(bam_path: Path) -> float:
+    """
+    Calculate mapping rate from BAM file using samtools stats.
+    
+    Args:
+        bam_path: Path to sorted BAM file
+        
+    Returns:
+        Mapping rate as fraction (0.0-1.0)
+        
+    Raises:
+        MappingError: If BAM file doesn't exist or samtools fails
+        ExternalToolError: If samtools is not available
+    """
+    if not shutil.which("samtools"):
+        raise ExternalToolError("samtools not found in PATH")
+    
+    if not bam_path.exists():
+        raise MappingError(f"BAM file not found: {bam_path}")
+    
+    logger.debug(f"Calculating mapping rate for {bam_path}")
+    
+    try:
+        # Run samtools stats to get read counts
+        cmd = ["samtools", "stats", str(bam_path)]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        total_reads = 0
+        mapped_reads = 0
+        
+        # Parse samtools stats output
+        for line in result.stdout.splitlines():
+            if line.startswith("SN\t"):
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    metric = parts[1]
+                    value_str = parts[2].strip()
+                    
+                    # Extract numbers (some lines have additional text after the number)
+                    try:
+                        value = int(value_str.split()[0])
+                    except (ValueError, IndexError):
+                        continue
+                    
+                    if "raw total sequences:" in metric:
+                        total_reads = value
+                    elif "reads mapped:" in metric:
+                        mapped_reads = value
+        
+        if total_reads == 0:
+            logger.warning(f"No reads found in BAM file {bam_path}")
+            return 0.0
+        
+        mapping_rate = mapped_reads / total_reads
+        logger.debug(f"Mapping rate: {mapped_reads}/{total_reads} = {mapping_rate:.4f}")
+        
+        return mapping_rate
+        
+    except subprocess.CalledProcessError as e:
+        raise MappingError(f"samtools stats failed: {e.stderr}")
+    except Exception as e:
+        raise MappingError(f"Failed to calculate mapping rate: {e}")
