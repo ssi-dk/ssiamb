@@ -1,0 +1,4 @@
+sample	r1	r2	assembly	bam	vcf
+listeria_test_sample	../self_mode/reads_R1.fastq.gz	../self_mode/reads_R2.fastq.gz	../self_mode/assembly.fna		
+listeria_test_sample_reuse	../self_mode/reads_R1.fastq.gz	../self_mode/reads_R2.fastq.gz	../self_mode/assembly.fna	../reuse/pre_mapped.bam	../reuse/pre_called.vcf.gz
+low_coverage_sample	../edge_cases/low_coverage_R1.fastq.gz	../edge_cases/low_coverage_R2.fastq.gz	../self_mode/assembly.fna		

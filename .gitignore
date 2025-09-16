@@ -130,3 +130,6 @@ todo.md
 # Re-include tiny fixtures for tests/docs
 # -------------------------------
 !fixtures/**
+
+# But exclude large potential test data
+fixtures/potential_data/

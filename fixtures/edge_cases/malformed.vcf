@@ -1,0 +1,5 @@
+##fileformat=VCFv4.2
+##INVALID_HEADER=missing_description
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample
+listeria_test_sample_1_84.0635	100	.	A	T	60	PASS	DP=20	GT:DP	1/1:20
+invalid_line_missing_columns	200	.	G

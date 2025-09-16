@@ -1,0 +1,4 @@
+sample	r1	r2	bracken	reference	species	bam	vcf
+listeria_test_sample	../ref_mode/reads_R1.fastq.gz	../ref_mode/reads_R2.fastq.gz	../supporting_files/bracken_listeria.tsv			
+listeria_test_sample_ref	../ref_mode/reads_R1.fastq.gz	../ref_mode/reads_R2.fastq.gz		../ref_mode/reference.fna		
+listeria_test_sample_species	../ref_mode/reads_R1.fastq.gz	../ref_mode/reads_R2.fastq.gz			Listeria_monocytogenes	

@@ -1,0 +1,19 @@
+name	taxonomy_id	taxonomy_lvl	kraken_assigned_reads	added_reads	new_est_reads	fraction_total_reads
+Listeria monocytogenes	1639	S	1718713	145289	1864002	0.99520
+Listeria innocua	1642	S	5984	764	6748	0.00360
+Listeria phage B025	330396	S	376	633	1009	0.00054
+Listeria ivanovii	1638	S	197	75	272	0.00015
+Listeria welshimeri	1643	S	239	11	250	0.00013
+Listeria phage LP-101	1458856	S	51	144	195	0.00010
+Listeria seeligeri	1640	S	89	14	103	0.00006
+Lactobacillus acidophilus	1579	S	44	26	70	0.00004
+Lactobacillus delbrueckii	1584	S	63	1	64	0.00003
+Bacillus thuringiensis	1428	S	15	43	58	0.00003
+Mycobacterium kansasii	1768	S	31	0	31	0.00002
+Halomonas sp. 'Soap Lake #7'	1962264	S	31	1	32	0.00002
+Burkholderia sp. CCGE1002	640511	S	28	2	30	0.00002
+Bordetella bronchiseptica	518	S	23	21	44	0.00002
+Streptomyces bingchenggensis	379067	S	17	1	18	0.00001
+Mycobacterium chimaera	222805	S	10	5	15	0.00001
+Lysinibacillus sphaericus	1421	S	11	0	11	0.00001
+Bacillus cereus	1396	S	10	17	27	0.00001

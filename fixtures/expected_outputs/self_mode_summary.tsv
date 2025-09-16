@@ -1,0 +1,2 @@
+sample	mode	mapper	caller	dp_min	maf_min	dp_cap	denom_policy	callable_bases	genome_length	breadth_10x	ambiguous_snv_count	ambiguous_snv_per_mb	ambiguous_indel_count	ambiguous_del_count	ref_label	ref_accession	bracken_species	bracken_frac	bracken_reads	alias_used	reused_bam	reused_vcf	runtime_sec	tool_version
+listeria_test_sample	self	minimap2	bbtools	10	0.10	100	default	2800000	2929593	0.95	12	4.3	3	1	listeria_test_sample_assembly	NA	NA	NA	NA	false	false	false	45.2	v1.0.0

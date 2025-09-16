@@ -1,0 +1,2 @@
+sample	mode	mapper	caller	dp_min	maf_min	dp_cap	denom_policy	callable_bases	genome_length	breadth_10x	ambiguous_snv_count	ambiguous_snv_per_mb	ambiguous_indel_count	ambiguous_del_count	ref_label	ref_accession	bracken_species	bracken_frac	bracken_reads	alias_used	reused_bam	reused_vcf	runtime_sec	tool_version
+listeria_test_sample	ref	minimap2	bbtools	10	0.10	100	default	2850000	2944528	0.92	18	6.1	5	2	Listeria_monocytogenes	NC_003210.1	Listeria monocytogenes	0.9952	1864002	false	false	false	52.8	v1.0.0
