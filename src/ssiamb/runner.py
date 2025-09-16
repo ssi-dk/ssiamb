@@ -21,6 +21,10 @@ from .refdir import (
     resolve_reference_directory, resolve_species_to_fasta, 
     parse_accession_from_fasta_header, ReferenceResolutionError
 )
+from .mapping import (
+    ensure_indexes_self, map_fastqs, check_external_tools,
+    MappingError, ExternalToolError
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -146,40 +150,99 @@ def run_self(plan: RunPlan) -> SummaryRow:
         
     Returns:
         Summary row with results
+        
+    Raises:
+        ExternalToolError: If required tools are not available
+        MappingError: If mapping fails
     """
     logger.info(f"Running self mode for sample {plan.sample}")
     
     # Ensure thresholds are properly initialized
     assert plan.thresholds.dp_min is not None, "dp_min threshold not set"
     assert plan.thresholds.maf_min is not None, "maf_min threshold not set"
+    assert plan.paths.assembly is not None, "Assembly path required for self mode"
     
     if plan.dry_run:
         logger.info("DRY RUN - would execute self-mapping pipeline")
+        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools")
+        logger.info(f"  Ensure indexes for {plan.paths.assembly} ({plan.mapper.value})")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to {plan.paths.assembly}")
         logger.info(f"  Using {plan.mapper.value} mapper and {plan.caller.value} caller")
         logger.info(f"  Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
+        logger.info(f"  Output: {plan.sample}.sorted.bam")
+        
+        # Return placeholder data for dry run
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=plan.paths.assembly.name,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=2800000,
+            genome_length=2900000,
+            breadth_10x=0.95,
+            mean_depth=25.0,
+            mapping_rate=0.98,
+            ambiguous_sites=42,
+            ref_calls=2799950,
+            alt_calls=8,
+            no_call=50,
+            qc_warnings="",
+        )
     
-    # TODO: Implement actual self-mapping pipeline
-    # For now, return placeholder data
-    return SummaryRow(
-        sample=plan.sample,
-        mode=plan.mode.value,
-        ref_label=plan.paths.assembly.name if plan.paths.assembly else "unknown",
-        mapper=plan.mapper.value,
-        caller=plan.caller.value,
-        dp_min=plan.thresholds.dp_min,
-        maf_min=plan.thresholds.maf_min,
-        callable_bases=2800000,  # ~2.8Mb typical bacterial genome
-        genome_length=2900000,
-        breadth_10x=0.95,
-        mean_depth=25.0,
-        mapping_rate=0.98,
-        ambiguous_sites=42,
-        ref_calls=2799950,
-        alt_calls=8,
-        no_call=50,
-        qc_warnings="",
-    )
+    # Check tool availability
+    tools = check_external_tools()
+    tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
+    if not tools.get(tool_name) or not tools.get('samtools'):
+        missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
+        raise ExternalToolError(f"Required tools not available: {missing}")
+    
+    try:
+        # Step 1: Ensure indexes exist for self-mode
+        logger.info(f"Ensuring indexes for {plan.paths.assembly}")
+        ensure_indexes_self(plan.paths.assembly, plan.mapper)
+        
+        # Step 2: Map reads to assembly
+        logger.info(f"Mapping reads to assembly using {plan.mapper.value}")
+        bam_path = map_fastqs(
+            mapper=plan.mapper,
+            fasta_path=plan.paths.assembly,
+            r1_path=plan.paths.r1,
+            r2_path=plan.paths.r2,
+            sample_name=plan.sample,
+            threads=plan.threads,
+            output_path=plan.paths.output_dir / f"{plan.sample}.sorted.bam"
+        )
+        
+        logger.info(f"Mapping completed: {bam_path}")
+        
+        # TODO: Continue with depth analysis, variant calling, etc.
+        # For now, return basic results
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=plan.paths.assembly.name,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=2800000,  # TODO: Calculate from mosdepth
+            genome_length=2900000,   # TODO: Calculate from reference
+            breadth_10x=0.95,        # TODO: Calculate from mosdepth
+            mean_depth=25.0,         # TODO: Calculate from mosdepth
+            mapping_rate=0.98,       # TODO: Calculate from BAM stats
+            ambiguous_sites=42,      # TODO: Calculate from variant calling
+            ref_calls=2799950,       # TODO: Calculate from variant analysis
+            alt_calls=8,             # TODO: Calculate from variant analysis
+            no_call=50,              # TODO: Calculate from variant analysis
+            qc_warnings="",          # TODO: Add QC warnings
+        )
+        
+    except (ExternalToolError, MappingError) as e:
+        logger.error(f"Self-mapping failed: {e}")
+        raise
 
 
 def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
