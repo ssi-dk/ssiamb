@@ -1,0 +1,67 @@
+# Default configuration for ssiamb
+# This file contains all configurable values that were previously hardcoded
+
+# Analysis thresholds for ambiguous site detection
+thresholds:
+  dp_min: 10              # Minimum depth to consider a site
+  maf_min: 0.1            # Minimum minor allele frequency 
+  dp_cap: 100             # Maximum depth (cap for calculation)
+  mapq_min: 20            # Minimum mapping quality
+  baseq_min: 20           # Minimum base quality
+
+# Species name aliases for reference resolution
+# Maps user-friendly names to canonical names or different species
+species_aliases:
+  # Common Shigella -> E. coli mappings
+  "Shigella sonnei": "Escherichia coli"
+  "Shigella flexneri": "Escherichia coli"
+  "Shigella dysenteriae": "Escherichia coli"
+  "Shigella boydii": "Escherichia coli"
+  
+  # Common abbreviations
+  "E. coli": "Escherichia coli"
+  "L. monocytogenes": "Listeria monocytogenes"
+  "S. enterica": "Salmonella enterica"
+  "C. jejuni": "Campylobacter jejuni"
+  
+  # Alternative naming schemes
+  "Salmonella enterica subsp. enterica": "Salmonella enterica"
+  "Campylobacter jejuni subsp. jejuni": "Campylobacter jejuni"
+
+# Tool-specific configuration
+tools:
+  minimap2:
+    preset: "sr"          # Short read preset
+    extra_args: []        # Additional arguments
+    
+  bwa-mem2:
+    extra_args: []        # Additional arguments
+    
+  bbtools:
+    variant_caller: "callvariants.sh"
+    extra_args: []
+    
+  bcftools:
+    mpileup_args: ["-d", "1000"]
+    call_args: ["-mv"]
+    
+  mosdepth:
+    window_size: 500      # Window size for depth calculation
+    extra_args: []
+    
+  samtools:
+    depth_args: ["-a"]    # Include all positions
+
+# Output formatting options
+output:
+  tsv:
+    float_precision: 3    # Decimal places for float values
+    
+  json:
+    indent: 2             # JSON indentation
+    
+  vcf:
+    include_filters: true # Include FILTER field info
+    
+  bed:
+    track_name: "ambiguous_sites"  # Track name for BED files

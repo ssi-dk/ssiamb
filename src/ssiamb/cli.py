@@ -45,6 +45,18 @@ def main(
             is_eager=True,
         ),
     ] = None,
+    config: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--config",
+            "-c",
+            help="Path to custom configuration file",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ] = None,
     verbose: Annotated[
         bool,
         typer.Option(
@@ -72,6 +84,17 @@ def main(
     if verbose and quiet:
         console.print("[red]Error: --verbose and --quiet cannot be used together[/red]")
         raise typer.Exit(1)
+    
+    # Load configuration if specified
+    if config:
+        from .config import load_config
+        try:
+            load_config(config)
+            if verbose:
+                console.print(f"[green]Loaded configuration from: {config}[/green]")
+        except Exception as e:
+            console.print(f"[red]Error loading config file {config}: {e}[/red]")
+            raise typer.Exit(1)
 
 
 @app.command()
@@ -185,6 +208,7 @@ def self(
 
 @app.command()
 def ref(
+    ctx: typer.Context,
     r1: Annotated[
         Path,
         typer.Option(
@@ -282,19 +306,45 @@ def ref(
     Maps paired-end reads to a reference genome to identify ambiguous sites.
     Reference can be provided directly, looked up by species, or selected from Bracken.
     """
-    console.print("[green]Running reference-mapping mode...[/green]")
-    console.print(f"R1: {r1}")
-    console.print(f"R2: {r2}")
-    console.print(f"Reference: {reference or 'auto-resolve'}")
-    console.print(f"Species: {species}")
-    console.print(f"Bracken: {bracken}")
-    console.print(f"Sample: {sample or 'auto-detect'}")
-    console.print(f"Mapper: {mapper}")
-    console.print(f"Caller: {caller}")
-    console.print(f"Min depth: {dp_min}, Min MAF: {maf_min}")
-    
-    # TODO: Implement reference-mapping logic
-    console.print("[yellow]Implementation pending...[/yellow]")
+    try:
+        # Get global options from context
+        dry_run = ctx.parent.params.get("dry_run", False) if ctx.parent else False
+        
+        # Create execution plan
+        plan = create_run_plan(
+            mode=Mode.REF,
+            r1=r1,
+            r2=r2,
+            reference=reference,
+            sample=sample,
+            output_dir=output_dir,
+            threads=threads,
+            mapper=mapper,
+            caller=caller,
+            dp_min=dp_min,
+            maf_min=maf_min,
+            dry_run=dry_run,
+            to_stdout=stdout,
+            species=species,
+            bracken=bracken,
+            ref_dir=ref_dir,
+            on_fail=on_fail,
+        )
+        
+        # Execute plan
+        result = execute_plan(plan, 
+                            species=species, 
+                            bracken=bracken, 
+                            ref_dir=ref_dir, 
+                            on_fail=on_fail)
+        
+        if not stdout:
+            console.print(f"[green]Reference-mapping completed for sample {result.sample}[/green]")
+            console.print(f"Found {result.ambiguous_sites} ambiguous sites")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
 
 
 @app.command()

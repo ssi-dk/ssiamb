@@ -9,7 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .config import SsiambConfig
 
 
 class Mode(Enum):
@@ -54,14 +57,37 @@ class OnFail(Enum):
 @dataclass
 class Thresholds:
     """Thresholds for ambiguous site detection."""
-    dp_min: int = 10
-    maf_min: float = 0.1
-    dp_cap: int = 100
-    mapq_min: int = 20
-    baseq_min: int = 20
+    dp_min: Optional[int] = None
+    maf_min: Optional[float] = None
+    dp_cap: Optional[int] = None
+    mapq_min: Optional[int] = None
+    baseq_min: Optional[int] = None
     
     def __post_init__(self) -> None:
-        """Validate threshold values."""
+        """Load defaults from configuration and validate threshold values."""
+        # Import here to avoid circular imports
+        from .config import get_config
+        
+        # Load defaults from config if not explicitly set
+        config = get_config()
+        if self.dp_min is None:
+            self.dp_min = config.get_threshold("dp_min", 10)
+        if self.maf_min is None:
+            self.maf_min = config.get_threshold("maf_min", 0.1)
+        if self.dp_cap is None:
+            self.dp_cap = config.get_threshold("dp_cap", 100)
+        if self.mapq_min is None:
+            self.mapq_min = config.get_threshold("mapq_min", 20)
+        if self.baseq_min is None:
+            self.baseq_min = config.get_threshold("baseq_min", 20)
+        
+        # Validate threshold values (now they should all be set)
+        assert self.dp_min is not None
+        assert self.maf_min is not None
+        assert self.dp_cap is not None
+        assert self.mapq_min is not None
+        assert self.baseq_min is not None
+        
         if self.dp_min < 1:
             raise ValueError("dp_min must be >= 1")
         if not 0.0 <= self.maf_min <= 1.0:
@@ -72,6 +98,36 @@ class Thresholds:
             raise ValueError("mapq_min must be >= 0")
         if self.baseq_min < 0:
             raise ValueError("baseq_min must be >= 0")
+    
+    @classmethod
+    def from_config(cls, config: Optional["SsiambConfig"] = None, **overrides) -> "Thresholds":
+        """
+        Create Thresholds from configuration with optional overrides.
+        
+        Args:
+            config: Configuration object (uses global if None)
+            **overrides: Explicit threshold values to override
+            
+        Returns:
+            Thresholds instance with config defaults and overrides applied
+        """
+        if config is None:
+            from .config import get_config
+            config = get_config()
+        
+        # Start with config defaults
+        kwargs = {
+            "dp_min": config.get_threshold("dp_min", 10),
+            "maf_min": config.get_threshold("maf_min", 0.1),
+            "dp_cap": config.get_threshold("dp_cap", 100),
+            "mapq_min": config.get_threshold("mapq_min", 20),
+            "baseq_min": config.get_threshold("baseq_min", 20),
+        }
+        
+        # Apply overrides
+        kwargs.update(overrides)
+        
+        return cls(**kwargs)
 
 
 @dataclass

@@ -17,6 +17,10 @@ from .io_utils import (
     infer_sample_name, validate_sample_name, write_tsv_summary, 
     write_tsv_to_stdout, SampleNameError
 )
+from .refdir import (
+    resolve_reference_directory, resolve_species_to_fasta, 
+    parse_accession_from_fasta_header, ReferenceResolutionError
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -187,26 +191,93 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     """
     logger.info(f"Running ref mode for sample {plan.sample}")
     
-    # TODO: Resolve reference from precedence: file > species > bracken
+    # Resolve reference using precedence: file > species > bracken
     ref_source = "unknown"
     ref_label = "unknown"
+    reference_path = None
     
-    if plan.paths.reference:
-        ref_source = "file"
-        ref_label = plan.paths.reference.name
-    elif kwargs.get("species"):
-        ref_source = "species"
-        ref_label = kwargs["species"]
-    elif kwargs.get("bracken"):
-        ref_source = "bracken"
-        ref_label = "bracken-selected"
+    try:
+        if plan.paths.reference:
+            # Direct reference file provided
+            ref_source = "file"
+            ref_label = plan.paths.reference.name
+            reference_path = plan.paths.reference
+            
+        elif kwargs.get("species"):
+            # Species lookup in admin directory
+            ref_source = "species"
+            species = kwargs["species"]
+            ref_dir = resolve_reference_directory(kwargs.get("ref_dir"))
+            
+            # Resolve species to FASTA file
+            reference_path = resolve_species_to_fasta(ref_dir, species)
+            ref_label = reference_path.name
+            
+            # Try to get accession for better labeling
+            accession = parse_accession_from_fasta_header(reference_path)
+            if accession:
+                ref_label = f"{species} ({accession})"
+            else:
+                ref_label = species
+                
+        elif kwargs.get("bracken"):
+            # Bracken-based selection (TODO: implement in next milestone)
+            ref_source = "bracken"
+            ref_label = "bracken-selected"
+            # For now, this will fail since Bracken parsing isn't implemented yet
+            raise ReferenceResolutionError("Bracken parsing not yet implemented")
+            
+        else:
+            raise ReferenceResolutionError(
+                "No reference specified. Provide one of: --reference, --species, or --bracken"
+            )
+            
+    except ReferenceResolutionError as e:
+        on_fail_action = kwargs.get("on_fail", "error")
+        
+        if on_fail_action == "error":
+            raise
+        elif on_fail_action == "warn":
+            logger.warning(f"Reference resolution failed: {e}")
+            # Continue with placeholder data
+            ref_source = "failed"
+            ref_label = "resolution_failed"
+        elif on_fail_action == "skip":
+            logger.info(f"Skipping due to reference resolution failure: {e}")
+            # Return a minimal result indicating skip
+            return SummaryRow(
+                sample=plan.sample,
+                mode=plan.mode.value,
+                ref_label="SKIPPED",
+                mapper=plan.mapper.value,
+                caller=plan.caller.value,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                callable_bases=0,
+                genome_length=0,
+                breadth_10x=0.0,
+                mean_depth=0.0,
+                mapping_rate=0.0,
+                ambiguous_sites=0,
+                ref_calls=0,
+                alt_calls=0,
+                no_call=0,
+                qc_warnings="reference_resolution_failed",
+            )
     
     if plan.dry_run:
         logger.info("DRY RUN - would execute reference-mapping pipeline")
-        logger.info(f"  Resolve reference from {ref_source}")
+        logger.info(f"  Reference source: {ref_source}")
+        logger.info(f"  Reference: {reference_path}")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to reference")
         logger.info(f"  Using {plan.mapper.value} mapper and {plan.caller.value} caller")
         logger.info(f"  Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
+    
+    # Update the plan's reference info
+    plan.ref_source = ref_source
+    plan.ref_label = ref_label
+    if reference_path:
+        plan.paths.reference = reference_path
     
     # TODO: Implement actual ref-mapping pipeline
     # For now, return placeholder data
@@ -227,7 +298,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         ref_calls=2749920,
         alt_calls=13,
         no_call=80,
-        qc_warnings="low_mapping_rate",
+        qc_warnings="low_mapping_rate" if ref_source != "failed" else "reference_resolution_failed",
     )
 
 
