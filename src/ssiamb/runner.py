@@ -149,6 +149,10 @@ def run_self(plan: RunPlan) -> SummaryRow:
     """
     logger.info(f"Running self mode for sample {plan.sample}")
     
+    # Ensure thresholds are properly initialized
+    assert plan.thresholds.dp_min is not None, "dp_min threshold not set"
+    assert plan.thresholds.maf_min is not None, "maf_min threshold not set"
+    
     if plan.dry_run:
         logger.info("DRY RUN - would execute self-mapping pipeline")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to {plan.paths.assembly}")
@@ -191,6 +195,10 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     """
     logger.info(f"Running ref mode for sample {plan.sample}")
     
+    # Ensure thresholds are properly initialized
+    assert plan.thresholds.dp_min is not None, "dp_min threshold not set"
+    assert plan.thresholds.maf_min is not None, "maf_min threshold not set"
+    
     # Resolve reference using precedence: file > species > bracken
     ref_source = "unknown"
     ref_label = "unknown"
@@ -221,11 +229,51 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                 ref_label = species
                 
         elif kwargs.get("bracken"):
-            # Bracken-based selection (TODO: implement in next milestone)
+            # Bracken-based species selection
+            from .bracken import select_species_from_file, BrackenThresholds, BrackenSelectionError
+            
             ref_source = "bracken"
-            ref_label = "bracken-selected"
-            # For now, this will fail since Bracken parsing isn't implemented yet
-            raise ReferenceResolutionError("Bracken parsing not yet implemented")
+            bracken_path = Path(kwargs["bracken"])
+            
+            # Get thresholds from configuration or defaults
+            min_frac = kwargs.get("min_bracken_frac", 0.70)
+            min_reads = kwargs.get("min_bracken_reads", 100000)
+            thresholds = BrackenThresholds(min_frac=min_frac, min_reads=min_reads)
+            
+            try:
+                # Select species from Bracken
+                selection = select_species_from_file(bracken_path, thresholds)
+                
+                if selection is None:
+                    raise ReferenceResolutionError(
+                        f"No species in Bracken file {bracken_path} meet selection criteria. "
+                        f"Try using --species or --reference instead."
+                    )
+                
+                # Extract species name from Bracken (e.g., "Listeria monocytogenes" from potentially complex name)
+                bracken_name = selection.species.name
+                parts = bracken_name.strip().split()
+                if len(parts) >= 2:
+                    species_for_resolution = f"{parts[0]} {parts[1]}"  # "Listeria monocytogenes"
+                else:
+                    species_for_resolution = bracken_name
+                
+                # Resolve species to reference file
+                ref_dir = resolve_reference_directory(kwargs.get("ref_dir"))
+                reference_path = resolve_species_to_fasta(ref_dir, species_for_resolution)
+                
+                # Create detailed label with Bracken info
+                from .refdir import normalize_species_name
+                accession = parse_accession_from_fasta_header(reference_path)
+                normalized_name = normalize_species_name(species_for_resolution)  # For label only
+                if accession:
+                    ref_label = f"{normalized_name} ({accession}) [Bracken: {selection.species.name}]"
+                else:
+                    ref_label = f"{normalized_name} [Bracken: {selection.species.name}]"
+                    
+            except BrackenSelectionError as e:
+                # Convert BrackenSelectionError to ReferenceResolutionError to use existing --on-fail logic
+                raise ReferenceResolutionError(str(e))
             
         else:
             raise ReferenceResolutionError(
