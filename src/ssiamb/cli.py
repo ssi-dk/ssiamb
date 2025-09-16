@@ -166,6 +166,18 @@ def self(
             "--mapq", help="Minimum mapping quality for depth analysis"
         ),
     ] = 30,
+    emit_vcf: Annotated[
+        bool,
+        typer.Option(
+            "--emit-vcf", help="Emit VCF file with ambiguous sites"
+        ),
+    ] = False,
+    emit_bed: Annotated[
+        bool,
+        typer.Option(
+            "--emit-bed", help="Emit BED file with ambiguous sites"
+        ),
+    ] = False,
     stdout: Annotated[
         bool,
         typer.Option(
@@ -199,6 +211,8 @@ def self(
             mapq=mapq,
             dry_run=dry_run,
             to_stdout=stdout,
+            emit_vcf=emit_vcf,
+            emit_bed=emit_bed,
         )
         
         # Execute plan
@@ -306,6 +320,18 @@ def ref(
             "--on-fail", help="Action when reference resolution fails"
         ),
     ] = "error",
+    emit_vcf: Annotated[
+        bool,
+        typer.Option(
+            "--emit-vcf", help="Emit VCF file with ambiguous sites"
+        ),
+    ] = False,
+    emit_bed: Annotated[
+        bool,
+        typer.Option(
+            "--emit-bed", help="Emit BED file with ambiguous sites"
+        ),
+    ] = False,
     stdout: Annotated[
         bool,
         typer.Option(
@@ -339,6 +365,8 @@ def ref(
             mapq=mapq,
             dry_run=dry_run,
             to_stdout=stdout,
+            emit_vcf=emit_vcf,
+            emit_bed=emit_bed,
             species=species,
             bracken=bracken,
             ref_dir=ref_dir,

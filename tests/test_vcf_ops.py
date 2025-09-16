@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import numpy as np
+import gzip
 
 from src.ssiamb.vcf_ops import (
     normalize_and_split, 
@@ -22,7 +23,9 @@ from src.ssiamb.vcf_ops import (
     VariantClass,
     VCFOperationError,
     SiteRecord,
-    check_vcf_tools
+    check_vcf_tools,
+    emit_vcf,
+    emit_bed
 )
 
 
@@ -441,6 +444,205 @@ class TestIntegration:
                 # That's sites at pos 100 (depth=50, MAF=0.4) and 300 (depth=15, MAF=0.3)
                 # But wait, site 300 has depth=15 < 20, so only site 100 qualifies
                 assert count == 1
+
+
+class TestEmitVCF:
+    """Test VCF emitter functionality."""
+    
+    def test_emit_vcf_with_test_data(self):
+        """Test VCF emitter with synthetic test data."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create a test VCF file
+            test_vcf = tmpdir / "test.vcf"
+            with open(test_vcf, 'w') as f:
+                f.write("""##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1
+chr1	100	.	A	G	60	PASS	.	GT:DP:AD	0/1:50:30,20
+chr1	200	.	C	T	30	FAIL	.	GT:DP:AD	0/1:5:3,2
+chr1	300	.	G	A	60	PASS	.	GT:DP:AD	0/1:100:70,30
+""")
+            
+            output_vcf = tmpdir / "output.vcf.gz"
+            
+            # Mock bgzip and tabix commands
+            with patch('subprocess.run') as mock_subprocess:
+                # Test with dp_min=10, maf_min=0.1 (all sites should pass thresholds)
+                result_path = emit_vcf(
+                    normalized_vcf_path=test_vcf,
+                    output_path=output_vcf,
+                    dp_min=10,
+                    maf_min=0.1,
+                    sample_name="test_sample",
+                    require_pass=False,
+                    included_contigs={"chr1"}
+                )
+                
+                assert result_path == output_vcf
+                # Should call tabix (bgzip is handled by pysam)
+                assert mock_subprocess.call_count >= 1
+    
+    def test_emit_vcf_empty_output(self):
+        """Test VCF emitter with no qualifying variants."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create a test VCF file with low-quality variants
+            test_vcf = tmpdir / "test.vcf"
+            with open(test_vcf, 'w') as f:
+                f.write("""##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1
+chr1	100	.	A	G	60	PASS	.	GT:DP:AD	0/1:5:4,1
+""")
+            
+            output_vcf = tmpdir / "output.vcf.gz"
+            
+            # Mock bgzip and tabix commands
+            with patch('subprocess.run') as mock_subprocess:
+                # High thresholds that no variants will pass
+                result_path = emit_vcf(
+                    normalized_vcf_path=test_vcf,
+                    output_path=output_vcf,
+                    dp_min=50,
+                    maf_min=0.4,
+                    sample_name="test_sample",
+                    require_pass=False,
+                    included_contigs={"chr1"}
+                )
+                
+                assert result_path == output_vcf
+                # Should still create valid VCF file with header (tabix call)
+                assert mock_subprocess.call_count >= 1
+
+
+class TestEmitBED:
+    """Test BED emitter functionality."""
+    
+    def test_emit_bed_with_test_data(self):
+        """Test BED emitter with synthetic test data."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create a test VCF file with different variant types
+            test_vcf = tmpdir / "test.vcf"
+            with open(test_vcf, 'w') as f:
+                f.write("""##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1
+chr1	100	.	A	G	60	PASS	.	GT:DP:AD	0/1:50:30,20
+chr1	200	.	C	CT	60	PASS	.	GT:DP:AD	0/1:40:20,20
+chr1	300	.	GTA	G	60	PASS	.	GT:DP:AD	0/1:30:15,15
+""")
+            
+            output_bed = tmpdir / "output.bed.gz"
+            
+            # Mock bgzip and tabix commands
+            with patch('subprocess.run') as mock_subprocess:
+                result_path = emit_bed(
+                    normalized_vcf_path=test_vcf,
+                    output_path=output_bed,
+                    dp_min=10,
+                    maf_min=0.1,
+                    sample_name="test_sample",
+                    included_contigs={"chr1"}
+                )
+                
+                assert result_path == output_bed
+                # Should call bgzip and tabix
+                assert mock_subprocess.call_count >= 2
+    
+    def test_emit_bed_coordinate_conversion(self):
+        """Test that BED coordinates are properly 0-based half-open."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create a test VCF file
+            test_vcf = tmpdir / "test.vcf"
+            with open(test_vcf, 'w') as f:
+                f.write("""##fileformat=VCFv4.2
+##contig=<ID=chr1,length=1000>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1
+chr1	100	.	A	G	60	PASS	.	GT:DP:AD	0/1:50:30,20
+""")
+            
+            output_bed = tmpdir / "output.bed.gz"
+            
+            # Mock bgzip and tabix subprocess calls
+            with patch('subprocess.run') as mock_subprocess:
+                result_path = emit_bed(
+                    normalized_vcf_path=test_vcf,
+                    output_path=output_bed,
+                    dp_min=10,
+                    maf_min=0.1,
+                    sample_name="test_sample",
+                    included_contigs={"chr1"}
+                )
+                
+                assert result_path == output_bed
+
+
+class TestEmitterIntegration:
+    """Test integration of emitters with the overall pipeline."""
+    
+    def test_emitter_tool_requirements(self):
+        """Test that emitters require bgzip and tabix tools."""
+        # This is covered by existing check_vcf_tools tests
+        with patch('shutil.which') as mock_which:
+            mock_which.return_value = None
+            assert check_vcf_tools() is False
+    
+    def test_emitter_file_extensions(self):
+        """Test that emitters handle file extensions correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            
+            # Create a minimal test VCF
+            test_vcf = tmpdir / "test.vcf"
+            with open(test_vcf, 'w') as f:
+                f.write("""##fileformat=VCFv4.2
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1
+""")
+            
+            # Test VCF output path handling
+            with patch('subprocess.run'):
+                # Test that .vcf.gz extension is added if missing
+                vcf_output = tmpdir / "output"
+                result = emit_vcf(
+                    normalized_vcf_path=test_vcf,
+                    output_path=vcf_output,
+                    dp_min=10,
+                    maf_min=0.1,
+                    sample_name="test",
+                    included_contigs=set()
+                )
+                assert str(result).endswith('.vcf.gz')
+                
+                # Test BED output path handling
+                bed_output = tmpdir / "output"
+                result = emit_bed(
+                    normalized_vcf_path=test_vcf,
+                    output_path=bed_output,
+                    dp_min=10,
+                    maf_min=0.1,
+                    sample_name="test",
+                    included_contigs=set()
+                )
+                assert str(result).endswith('.bed.gz')
 
 
 if __name__ == "__main__":

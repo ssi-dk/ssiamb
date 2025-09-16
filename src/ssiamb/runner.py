@@ -33,7 +33,7 @@ from .calling import (
 )
 from .vcf_ops import (
     normalize_and_split, count_ambiguous_sites, VCFOperationError,
-    VariantClass, check_vcf_tools
+    VariantClass, check_vcf_tools, emit_vcf, emit_bed
 )
 from .version import __version__
 
@@ -56,6 +56,8 @@ def create_run_plan(
     mapq: int = 30,
     dry_run: bool = False,
     to_stdout: bool = False,
+    emit_vcf: bool = False,
+    emit_bed: bool = False,
     **kwargs,
 ) -> RunPlan:
     """
@@ -141,9 +143,9 @@ def create_run_plan(
         threads=threads,
         dry_run=dry_run,
         to_stdout=to_stdout,
-        # Extract output flags from kwargs
-        emit_vcf=kwargs.get("emit_vcf", False),
-        emit_bed=kwargs.get("emit_bed", False),
+        # Extract output flags
+        emit_vcf=emit_vcf,
+        emit_bed=emit_bed,
         emit_matrix=kwargs.get("emit_matrix", False),
         emit_per_contig=kwargs.get("emit_per_contig", False),
         emit_provenance=kwargs.get("emit_provenance", False),
@@ -333,6 +335,32 @@ def run_self(plan: RunPlan) -> SummaryRow:
             )
             
             logger.info(f"Found {ambiguous_snv_count} ambiguous SNVs, {all_variants_count} total variant sites")
+            
+            # Optional emitters (only create files if flags are set)
+            if plan.emit_vcf:
+                vcf_output_path = plan.paths.output_dir / f"{plan.sample}.ambiguous_sites.vcf.gz"
+                logger.info(f"Emitting VCF to {vcf_output_path}")
+                emit_vcf(
+                    normalized_vcf_path=normalized_vcf_path,
+                    output_path=vcf_output_path,
+                    dp_min=plan.thresholds.dp_min,
+                    maf_min=plan.thresholds.maf_min,
+                    sample_name=plan.sample,
+                    require_pass=False,  # TODO: Add this to plan if needed
+                    included_contigs=included_contigs
+                )
+            
+            if plan.emit_bed:
+                bed_output_path = plan.paths.output_dir / f"{plan.sample}.ambiguous_sites.bed.gz"
+                logger.info(f"Emitting BED to {bed_output_path}")
+                emit_bed(
+                    normalized_vcf_path=normalized_vcf_path,
+                    output_path=bed_output_path,
+                    dp_min=plan.thresholds.dp_min,
+                    maf_min=plan.thresholds.maf_min,
+                    sample_name=plan.sample,
+                    included_contigs=included_contigs
+                )
             
         except VCFOperationError as e:
             logger.error(f"VCF analysis failed: {e}")
@@ -730,6 +758,32 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             )
             
             logger.info(f"Found {ambiguous_snv_count} ambiguous SNVs, {all_variants_count} total variant sites")
+            
+            # Optional emitters (only create files if flags are set)
+            if plan.emit_vcf:
+                vcf_output_path = plan.paths.output_dir / f"{plan.sample}.ambiguous_sites.vcf.gz"
+                logger.info(f"Emitting VCF to {vcf_output_path}")
+                emit_vcf(
+                    normalized_vcf_path=normalized_vcf_path,
+                    output_path=vcf_output_path,
+                    dp_min=plan.thresholds.dp_min,
+                    maf_min=plan.thresholds.maf_min,
+                    sample_name=plan.sample,
+                    require_pass=False,  # TODO: Add this to plan if needed
+                    included_contigs=included_contigs
+                )
+            
+            if plan.emit_bed:
+                bed_output_path = plan.paths.output_dir / f"{plan.sample}.ambiguous_sites.bed.gz"
+                logger.info(f"Emitting BED to {bed_output_path}")
+                emit_bed(
+                    normalized_vcf_path=normalized_vcf_path,
+                    output_path=bed_output_path,
+                    dp_min=plan.thresholds.dp_min,
+                    maf_min=plan.thresholds.maf_min,
+                    sample_name=plan.sample,
+                    included_contigs=included_contigs
+                )
             
         except VCFOperationError as e:
             logger.error(f"VCF analysis failed: {e}")

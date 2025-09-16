@@ -476,3 +476,307 @@ def count_ambiguous_sites(vcf_path: Path, dp_min: int, maf_min: float,
     logger.info(f"Found {ambiguous_count} ambiguous sites (dp>={dp_min}, maf>={maf_min})")
     
     return ambiguous_count, grid
+
+
+def emit_vcf(
+    normalized_vcf_path: Path,
+    output_path: Path,
+    dp_min: int,
+    maf_min: float,
+    sample_name: str,
+    require_pass: bool = False,
+    included_contigs: Optional[Set[str]] = None
+) -> Path:
+    """
+    Emit VCF output with only records passing ambiguous site thresholds.
+    
+    Args:
+        normalized_vcf_path: Path to normalized input VCF
+        output_path: Output VCF path (will be bgzipped)
+        dp_min: Minimum depth threshold
+        maf_min: Minimum MAF threshold
+        sample_name: Sample name for output
+        require_pass: If True, include ORIG_FILTER info field
+        included_contigs: Set of contigs to include
+        
+    Returns:
+        Path to compressed, indexed VCF file
+        
+    Raises:
+        VCFOperationError: If emission fails
+    """
+    try:
+        # Ensure output path has .vcf.gz extension
+        if not str(output_path).endswith('.vcf.gz'):
+            output_path = output_path.with_suffix('.vcf.gz')
+        
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with pysam.VariantFile(str(normalized_vcf_path)) as input_vcf:
+            # Create output VCF with enhanced header
+            header = input_vcf.header.copy()
+            
+            # Add custom INFO fields
+            header.add_line('##INFO=<ID=AMBIG,Number=0,Type=Flag,Description="Site passes ambiguous thresholds">')
+            header.add_line('##INFO=<ID=MAF,Number=1,Type=Float,Description="Minor allele frequency">')
+            header.add_line('##INFO=<ID=MAF_BIN,Number=1,Type=Integer,Description="MAF bin (floor(100*MAF))">')
+            header.add_line('##INFO=<ID=DP_CAP,Number=1,Type=Integer,Description="Depth cap used (100)">')
+            header.add_line('##INFO=<ID=VARIANT_CLASS,Number=1,Type=String,Description="Variant class (SNV/INS/DEL)">')
+            
+            if not require_pass:
+                header.add_line('##INFO=<ID=ORIG_FILTER,Number=1,Type=String,Description="Original FILTER value">')
+            
+            # Add FILTER definitions
+            header.add_line('##FILTER=<ID=PASS,Description="All filters passed">')
+            
+            with pysam.VariantFile(str(output_path), 'w', header=header) as output_vcf:
+                records_written = 0
+                
+                for record in input_vcf:
+                    # Filter by included contigs
+                    if included_contigs is not None and record.chrom not in included_contigs:
+                        continue
+                    
+                    # Skip if no ALT alleles
+                    if not record.alts:
+                        continue
+                    
+                    # Process each ALT allele (though normalization should make these single)
+                    for alt_allele in record.alts:
+                        # Skip if ref or alt is None
+                        if record.ref is None or alt_allele is None:
+                            continue
+                            
+                        variant_class = classify_variant(record.ref, alt_allele)
+                        
+                        # Skip unknown/symbolic variants
+                        if variant_class == VariantClass.UNKNOWN:
+                            continue
+                        
+                        # Extract MAF and depth
+                        maf = extract_maf_from_record(record)
+                        if maf is None:
+                            continue
+                        
+                        # Get depth
+                        depth = 0
+                        if "DP" in record.info:
+                            depth = record.info["DP"]
+                        elif "AD" in record.format:
+                            samples = list(record.samples)
+                            if samples:
+                                sample = record.samples[samples[0]]
+                                ad = sample.get("AD")
+                                if ad is not None:
+                                    depth = sum(ad)
+                        
+                        # Check if passes thresholds
+                        passes_thresholds = depth >= dp_min and maf >= maf_min
+                        
+                        if passes_thresholds:
+                            # Create output record
+                            new_record = output_vcf.new_record(
+                                contig=record.chrom,
+                                start=record.start,
+                                stop=record.stop,
+                                alleles=(record.ref, alt_allele),
+                                id=record.id,
+                                qual=record.qual
+                            )
+                            
+                            # Copy existing INFO fields
+                            for key, value in record.info.items():
+                                new_record.info[key] = value
+                            
+                            # Add our custom INFO fields
+                            new_record.info["AMBIG"] = True
+                            new_record.info["MAF"] = round(maf, 4)
+                            new_record.info["MAF_BIN"] = int(np.floor(100 * maf))
+                            new_record.info["DP_CAP"] = 100
+                            new_record.info["VARIANT_CLASS"] = variant_class.value
+                            
+                            if not require_pass:
+                                filter_keys = list(record.filter.keys())
+                                orig_filter = ";".join(str(k) for k in filter_keys) if filter_keys else "PASS"
+                                new_record.info["ORIG_FILTER"] = orig_filter
+                            
+                            # Set FILTER to PASS
+                            new_record.filter.clear()
+                            new_record.filter.add("PASS")
+                            
+                            # Copy FORMAT fields
+                            for sample in record.samples:
+                                for key in record.format:
+                                    new_record.samples[sample][key] = record.samples[sample][key]
+                            
+                            output_vcf.write(new_record)
+                            records_written += 1
+        
+        # Index the compressed VCF
+        tabix_cmd = ["tabix", "-p", "vcf", str(output_path)]
+        subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
+        
+        logger.info(f"Emitted VCF with {records_written} ambiguous sites: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        error_msg = f"VCF emission failed: {str(e)}"
+        logger.error(error_msg)
+        raise VCFOperationError(error_msg) from e
+
+
+def emit_bed(
+    normalized_vcf_path: Path,
+    output_path: Path,
+    dp_min: int,
+    maf_min: float,
+    sample_name: str,
+    included_contigs: Optional[Set[str]] = None
+) -> Path:
+    """
+    Emit BED output with ambiguous sites in 0-based half-open coordinates.
+    
+    BED format columns:
+    chrom, start, end, name, score, strand, sample, variant_class, ref, alt, maf, dp, maf_bin, dp_cap
+    
+    Args:
+        normalized_vcf_path: Path to normalized input VCF
+        output_path: Output BED path (will be bgzipped)
+        dp_min: Minimum depth threshold
+        maf_min: Minimum MAF threshold
+        sample_name: Sample name
+        included_contigs: Set of contigs to include
+        
+    Returns:
+        Path to compressed, indexed BED file
+        
+    Raises:
+        VCFOperationError: If emission fails
+    """
+    try:
+        # Ensure output path has .bed.gz extension
+        if not str(output_path).endswith('.bed.gz'):
+            output_path = output_path.with_suffix('.bed.gz')
+        
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        bed_records = []
+        
+        with pysam.VariantFile(str(normalized_vcf_path)) as input_vcf:
+            for record in input_vcf:
+                # Filter by included contigs
+                if included_contigs is not None and record.chrom not in included_contigs:
+                    continue
+                
+                # Skip if no ALT alleles
+                if not record.alts:
+                    continue
+                
+                # Process each ALT allele
+                for alt_allele in record.alts:
+                    # Skip if ref or alt is None
+                    if record.ref is None or alt_allele is None:
+                        continue
+                        
+                    variant_class = classify_variant(record.ref, alt_allele)
+                    
+                    # Skip unknown/symbolic variants
+                    if variant_class == VariantClass.UNKNOWN:
+                        continue
+                    
+                    # Extract MAF and depth
+                    maf = extract_maf_from_record(record)
+                    if maf is None:
+                        continue
+                    
+                    # Get depth
+                    depth = 0
+                    if "DP" in record.info:
+                        depth = record.info["DP"]
+                    elif "AD" in record.format:
+                        samples = list(record.samples)
+                        if samples:
+                            sample = record.samples[samples[0]]
+                            ad = sample.get("AD")
+                            if ad is not None:
+                                depth = sum(ad)
+                    
+                    # Check if passes thresholds
+                    passes_thresholds = depth >= dp_min and maf >= maf_min
+                    
+                    if passes_thresholds:
+                        # Convert to 0-based coordinates
+                        # VCF is 1-based, BED is 0-based half-open
+                        start = record.start  # pysam already converts to 0-based
+                        
+                        if variant_class == VariantClass.SNV:
+                            # SNV: 1bp interval
+                            end = start + 1
+                        elif variant_class == VariantClass.INS:
+                            # Insertion: 1bp anchor position
+                            end = start + 1
+                        elif variant_class == VariantClass.DEL:
+                            # Deletion: span the deleted bases
+                            if record.ref is not None:
+                                end = start + len(record.ref)
+                            else:
+                                end = start + 1
+                        else:
+                            end = start + 1
+                        
+                        # Create BED record
+                        name = f"{record.chrom}:{record.pos}_{record.ref}>{alt_allele}"
+                        score = min(1000, int(1000 * maf))  # Scale MAF to 0-1000
+                        maf_bin = int(np.floor(100 * maf))
+                        
+                        bed_record = [
+                            record.chrom,           # chrom
+                            str(start),             # start (0-based)
+                            str(end),               # end (0-based half-open)
+                            name,                   # name
+                            str(score),             # score (0-1000)
+                            ".",                    # strand (not applicable)
+                            sample_name,            # sample
+                            variant_class.value,    # variant_class
+                            record.ref,             # ref
+                            alt_allele,             # alt
+                            f"{maf:.4f}",          # maf
+                            str(depth),             # dp
+                            str(maf_bin),          # maf_bin
+                            "100"                   # dp_cap
+                        ]
+                        
+                        bed_records.append(bed_record)
+        
+        # Sort records by chromosome and position
+        bed_records.sort(key=lambda x: (x[0], int(x[1])))
+        
+        # Write BED file
+        temp_bed = output_path.with_suffix('.bed')
+        with open(temp_bed, 'w') as f:
+            # Write header comment
+            f.write("# chrom\tstart\tend\tname\tscore\tstrand\tsample\tvariant_class\tref\talt\tmaf\tdp\tmaf_bin\tdp_cap\n")
+            
+            # Write records
+            for record in bed_records:
+                f.write('\t'.join(record) + '\n')
+        
+        # Compress with bgzip
+        bgzip_cmd = ["bgzip", "-c", str(temp_bed)]
+        with open(output_path, 'w') as f:
+            subprocess.run(bgzip_cmd, stdout=f, check=True)
+        
+        # Remove temporary file
+        temp_bed.unlink()
+        
+        # Index with tabix
+        tabix_cmd = ["tabix", "-p", "bed", str(output_path)]
+        subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
+        
+        logger.info(f"Emitted BED with {len(bed_records)} ambiguous sites: {output_path}")
+        return output_path
+        
+    except Exception as e:
+        error_msg = f"BED emission failed: {str(e)}"
+        logger.error(error_msg)
+        raise VCFOperationError(error_msg) from e
