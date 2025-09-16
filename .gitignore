@@ -49,6 +49,8 @@ temp/
 
 # CLI results and large bioinformatics artifacts (keep fixtures explicitly later)
 ambiguous_summary.tsv
+*_ambiguous_summary.tsv
+test_*_ambiguous_summary.tsv
 *.run_provenance.json
 *.multiqc.tsv
 *.per_contig_summary.tsv
