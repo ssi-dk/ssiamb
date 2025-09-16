@@ -207,8 +207,8 @@ def extract_maf_from_record(record) -> Optional[float]:
                 sample = record.samples[samples[0]]  # Single sample
                 ad = sample.get("AD")
                 if ad is not None and len(ad) >= 2:
-                    ref_depth = ad[0]
-                    alt_depth = sum(ad[1:])  # Sum all alt alleles
+                    ref_depth = int(ad[0])
+                    alt_depth = sum(int(x) for x in ad[1:])  # Sum all alt alleles
                     total_depth = ref_depth + alt_depth
                     if total_depth > 0:
                         ref_freq = ref_depth / total_depth
@@ -219,8 +219,8 @@ def extract_maf_from_record(record) -> Optional[float]:
         if "DP4" in record.info:
             dp4 = record.info["DP4"]
             if len(dp4) == 4:
-                ref_depth = dp4[0] + dp4[1]  # Forward + reverse ref
-                alt_depth = dp4[2] + dp4[3]  # Forward + reverse alt
+                ref_depth = int(dp4[0]) + int(dp4[1])  # Forward + reverse ref
+                alt_depth = int(dp4[2]) + int(dp4[3])  # Forward + reverse alt
                 total_depth = ref_depth + alt_depth
                 if total_depth > 0:
                     ref_freq = ref_depth / total_depth
@@ -421,6 +421,8 @@ class AmbigGrid:
         """
         Write cumulative grid to wide TSV format.
         
+        Per spec.md §4.4: "Wide table: rows depth=1..100; columns maf_0..maf_50"
+        
         Args:
             output_path: Output file path
         """
@@ -434,8 +436,8 @@ class AmbigGrid:
             # Write header
             f.write('\t'.join(header) + '\n')
             
-            # Write data rows
-            for dp in range(self.dp_cap + 1):
+            # Write data rows - start from depth=1, not depth=0 (per spec §4.4)
+            for dp in range(1, self.dp_cap + 1):
                 row = [str(dp)] + [str(cumulative[dp, maf_bin]) for maf_bin in range(self.maf_bins)]
                 f.write('\t'.join(row) + '\n')
         
@@ -904,14 +906,14 @@ def emit_per_contig(
                     # Get depth
                     depth = 0
                     if "DP" in record.info:
-                        depth = record.info["DP"]
+                        depth = int(record.info["DP"])
                     elif "AD" in record.format:
                         samples = list(record.samples)
                         if samples:
                             sample = record.samples[samples[0]]
                             ad = sample.get("AD")
                             if ad is not None:
-                                depth = sum(ad)
+                                depth = sum(int(x) for x in ad)
                     
                     # Check if passes thresholds
                     if depth >= dp_min and maf >= maf_min:
@@ -946,8 +948,9 @@ def emit_per_contig(
                 indel_count = counts['indel']
                 del_count = counts['del']
                 
-                # Calculate SNV per Mb
-                snv_per_mb = (snv_count * 1_000_000) / length if length > 0 else 0.0
+                # Calculate SNV per Mb - use callable_bases, not total length
+                # Per spec.md §4.1: ambiguous_snv_per_mb = ambiguous_snv_count * 1e6 / callable_bases
+                snv_per_mb = (snv_count * 1_000_000) / callable_bases if callable_bases > 0 else 0.0
                 
                 row = [
                     sample_name,
@@ -1018,7 +1021,8 @@ def emit_multiqc(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Calculate ambiguous SNVs per megabase
-        ambiguous_snv_per_mb = (ambiguous_snv_count * 1_000_000) / genome_length if genome_length > 0 else 0.0
+        # Per spec.md §4.1: ambiguous_snv_per_mb = ambiguous_snv_count * 1e6 / callable_bases
+        ambiguous_snv_per_mb = (ambiguous_snv_count * 1_000_000) / callable_bases if callable_bases > 0 else 0.0
         
         with open(output_path, 'w') as f:
             # Write header

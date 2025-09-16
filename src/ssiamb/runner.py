@@ -6,8 +6,11 @@ of self, ref, and summarize modes by calling appropriate modules.
 """
 
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Tuple, Dict
 import logging
+import time
+import subprocess
+import re
 
 from .models import (
     Mode, Mapper, Caller, DepthTool, SummaryRow, RunPlan, Paths, Thresholds,
@@ -38,8 +41,206 @@ from .vcf_ops import (
 from .mapping import calculate_mapping_rate
 from .reuse import has_duplicate_flags, run_markdup_for_depth, CompatibilityError
 from .version import __version__
+import time
+import pysam
 
 logger = logging.getLogger(__name__)
+
+
+def get_tool_versions(plan: RunPlan) -> str:
+    """
+    Detect versions of external tools used in the workflow.
+    
+    Args:
+        plan: Run plan containing tool choices
+        
+    Returns:
+        Formatted string with tool versions
+    """
+    versions = {}
+    
+    # Map plan tools to version commands
+    version_commands = {
+        plan.mapper.value: _get_mapper_version(plan.mapper.value),
+        plan.caller.value: _get_caller_version(plan.caller.value),
+        "samtools": ["samtools", "--version"],
+        "mosdepth": ["mosdepth", "--version"],
+        "bcftools": ["bcftools", "--version"],
+    }
+    
+    for tool, cmd in version_commands.items():
+        try:
+            if cmd:
+                result = subprocess.run(
+                    cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    version = _extract_version(result.stdout)
+                    if version:
+                        versions[tool] = version
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            pass
+    
+    # Format as tool:version pairs
+    if versions:
+        return ";".join(f"{tool}:{ver}" for tool, ver in sorted(versions.items()))
+    else:
+        return "NA"
+
+
+def _get_mapper_version(mapper: str) -> Optional[List[str]]:
+    """Get version command for mapper."""
+    if mapper == "minimap2":
+        return ["minimap2", "--version"]
+    elif mapper == "bwa-mem2":
+        return ["bwa-mem2", "version"]
+    return None
+
+
+def _get_caller_version(caller: str) -> Optional[List[str]]:
+    """Get version command for variant caller."""
+    if caller == "bbtools":
+        return ["bbmap.sh", "version"]
+    elif caller == "bcftools":
+        return ["bcftools", "--version"]
+    return None
+
+
+def _extract_version(output: str) -> Optional[str]:
+    """Extract version number from tool output."""
+    # Common version patterns
+    patterns = [
+        r'version\s+([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+        r'v?([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+        r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, output, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
+def extract_ref_accession(fasta_path: Path) -> str:
+    """
+    Extract the reference accession from a FASTA file header.
+    
+    Args:
+        fasta_path: Path to the FASTA file
+        
+    Returns:
+        Reference accession or "NA" if not found
+    """
+    try:
+        with pysam.FastaFile(str(fasta_path)) as fasta:
+            # Get the first reference sequence header
+            if len(fasta.references) > 0:
+                first_ref = fasta.references[0]
+                # Try to extract accession from header format like >NC_123456.1 description
+                if first_ref.startswith(('NC_', 'NZ_', 'AC_', 'CP_')):
+                    # Extract up to first space or dot
+                    accession = first_ref.split('.')[0]
+                    return accession
+                else:
+                    return first_ref[:50]  # First 50 chars of header
+    except Exception as e:
+        logger.debug(f"Could not extract ref accession from {fasta_path}: {e}")
+    
+    return "NA"
+
+
+def detect_reuse_from_plan(plan: RunPlan) -> Tuple[bool, bool]:
+    """
+    Detect if BAM or VCF files are being reused based on plan paths.
+    
+    Args:
+        plan: The execution plan
+        
+    Returns:
+        Tuple of (reused_bam, reused_vcf) booleans
+    """
+    reused_bam = False
+    reused_vcf = False
+    
+    # Check if BAM path is provided (indicating reuse)
+    if plan.paths.bam is not None and plan.paths.bam.exists():
+        reused_bam = True
+        
+    # Check if VCF path is provided (indicating reuse)
+    if plan.paths.vcf is not None and plan.paths.vcf.exists():
+        reused_vcf = True
+        
+    return reused_bam, reused_vcf
+
+
+def create_summary_row(
+    sample: str,
+    mode: str,
+    mapper: str,
+    caller: str,
+    dp_min: int,
+    maf_min: float,
+    dp_cap: int,
+    callable_bases: int,
+    genome_length: int,
+    ambiguous_snv_count: int,
+    ambiguous_indel_count: int = 0,
+    ambiguous_del_count: int = 0,
+    ref_label: str = "NA",
+    ref_accession: str = "NA",
+    bracken_species: str = "NA",
+    bracken_frac: float = 0.0,
+    bracken_reads: int = 0,
+    alias_used: str = "NA", 
+    reused_bam: bool = False,
+    reused_vcf: bool = False,
+    runtime_sec: float = 0.0,
+    denom_policy: str = "exclude_dups"
+) -> SummaryRow:
+    """
+    Create a SummaryRow with proper field calculations and formatting.
+    
+    Args:
+        Basic parameters for SummaryRow creation
+        
+    Returns:
+        Fully populated SummaryRow object
+    """
+    # Calculate derived fields
+    breadth_10x = callable_bases / genome_length if genome_length > 0 else 0.0
+    ambiguous_snv_per_mb = (ambiguous_snv_count * 1_000_000) / callable_bases if callable_bases > 0 else 0.0
+    
+    return SummaryRow(
+        sample=sample,
+        mode=mode,
+        mapper=mapper,
+        caller=caller,
+        dp_min=dp_min,
+        maf_min=maf_min,
+        dp_cap=dp_cap,
+        denom_policy=denom_policy,
+        callable_bases=callable_bases,
+        genome_length=genome_length,
+        breadth_10x=breadth_10x,
+        ambiguous_snv_count=ambiguous_snv_count,
+        ambiguous_snv_per_mb=ambiguous_snv_per_mb,
+        ambiguous_indel_count=ambiguous_indel_count,
+        ambiguous_del_count=ambiguous_del_count,
+        ref_label=ref_label,
+        ref_accession=ref_accession,
+        bracken_species=bracken_species,
+        bracken_frac=bracken_frac,
+        bracken_reads=bracken_reads,
+        alias_used=alias_used,
+        reused_bam=reused_bam,
+        reused_vcf=reused_vcf,
+        runtime_sec=runtime_sec,
+        tool_version=__version__
+    )
 
 
 def create_run_plan(
@@ -53,9 +254,13 @@ def create_run_plan(
     threads: int = 1,
     mapper: str = "minimap2",
     caller: str = "bbtools",
+    bbtools_mem: Optional[str] = None,
     dp_min: int = 10,
     maf_min: float = 0.1,
+    dp_cap: int = 100,
     mapq: int = 30,
+    depth_tool: str = "mosdepth",
+    require_pass: bool = False,
     dry_run: bool = False,
     to_stdout: bool = False,
     emit_vcf: bool = False,
@@ -63,6 +268,7 @@ def create_run_plan(
     emit_matrix: bool = False,
     emit_per_contig: bool = False,
     emit_multiqc: bool = False,
+    emit_provenance: bool = False,
     **kwargs,
 ) -> RunPlan:
     """
@@ -114,6 +320,7 @@ def create_run_plan(
     thresholds = Thresholds(
         dp_min=dp_min,
         maf_min=maf_min,
+        dp_cap=dp_cap,
         mapq_min=mapq,
     )
     
@@ -137,6 +344,13 @@ def create_run_plan(
     if mode == Mode.REF and all(x is None for x in [reference, kwargs.get("species"), kwargs.get("bracken")]):
         raise ValueError("Ref mode requires one of: --reference, --species, or --bracken")
     
+    # Validate depth_tool
+    try:
+        depth_tool_enum = DepthTool(depth_tool)
+    except ValueError:
+        valid_depth_tools = [d.value for d in DepthTool]
+        raise ValueError(f"Invalid depth_tool '{depth_tool}'. Valid options: {valid_depth_tools}")
+    
     # Create run plan
     plan = RunPlan(
         mode=mode,
@@ -145,6 +359,9 @@ def create_run_plan(
         thresholds=thresholds,
         mapper=mapper_enum,
         caller=caller_enum,
+        depth_tool=depth_tool_enum,
+        bbtools_mem=bbtools_mem,
+        require_pass=require_pass,
         threads=threads,
         dry_run=dry_run,
         to_stdout=to_stdout,
@@ -153,8 +370,9 @@ def create_run_plan(
         emit_bed=emit_bed,
         emit_matrix=emit_matrix,
         emit_per_contig=emit_per_contig,
-        emit_provenance=kwargs.get("emit_provenance", False),
+        emit_provenance=emit_provenance,
         emit_multiqc=emit_multiqc,
+        tsv_mode=kwargs.get("tsv_mode", TSVMode.OVERWRITE),
     )
     
     logger.info(f"Created run plan for {mode.value} mode, sample {sample}")
@@ -198,25 +416,29 @@ def run_self(plan: RunPlan) -> SummaryRow:
         logger.info(f"  Count ambiguous sites: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
         logger.info(f"  Output: {plan.sample}.sorted.bam, {plan.sample}.mosdepth.summary.txt, {plan.sample}.vcf, {plan.sample}.normalized.vcf.gz")
         
+        # Detect reuse and extract ref accession
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        ref_accession = extract_ref_accession(plan.paths.assembly)
+        
         # Return placeholder data for dry run
-        return SummaryRow(
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=plan.paths.assembly.name,
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=2800000,
             genome_length=2900000,
-            breadth_10x=0.95,
-            mean_depth=25.0,
-            mapping_rate=0.98,
-            ambiguous_sites=42,
-            ref_calls=2799950,
-            alt_calls=8,
-            no_call=50,
-            qc_warnings="",
+            ambiguous_snv_count=42,
+            ambiguous_indel_count=0,
+            ambiguous_del_count=0,
+            ref_label=plan.paths.assembly.name if plan.paths.assembly else "NA",
+            ref_accession=ref_accession,
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0
         )
     
     # Check tool availability
@@ -466,24 +688,58 @@ def run_self(plan: RunPlan) -> SummaryRow:
                 output_path=multiqc_output_path
             )
         
-        return SummaryRow(
+        
+        # Calculate variant counts by type
+        _, grid = count_ambiguous_sites(
+            vcf_path=normalized_vcf_path,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+            included_contigs=included_contigs,
+            variant_classes=[VariantClass.SNV]
+        )
+        
+        # Count indels and deletions separately
+        ambiguous_indel_count, _ = count_ambiguous_sites(
+            vcf_path=normalized_vcf_path,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+            included_contigs=included_contigs,
+            variant_classes=[VariantClass.INS]
+        )
+        
+        ambiguous_del_count, _ = count_ambiguous_sites(
+            vcf_path=normalized_vcf_path,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+            included_contigs=included_contigs,
+            variant_classes=[VariantClass.DEL]
+        )
+        
+        # Detect reuse and extract ref accession
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        ref_accession = extract_ref_accession(plan.paths.assembly)
+        
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=plan.paths.assembly.name,
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=callable_bases,
             genome_length=genome_length,
-            breadth_10x=breadth_10x,
-            mean_depth=mean_depth,
-            mapping_rate=mapping_rate,       # Calculated from BAM stats
-            ambiguous_sites=ambiguous_snv_count,
-            ref_calls=ref_calls,
-            alt_calls=all_variants_count,
-            no_call=genome_length - callable_bases if genome_length > callable_bases else 0,
-            qc_warnings=qc_warnings,
+            ambiguous_snv_count=ambiguous_snv_count,
+            ambiguous_indel_count=ambiguous_indel_count,
+            ambiguous_del_count=ambiguous_del_count,
+            ref_label=plan.paths.assembly.name if plan.paths.assembly else "NA",
+            ref_accession=ref_accession,
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0  # TODO: Add proper runtime tracking
         )
         
     except (ExternalToolError, MappingError) as e:
@@ -491,25 +747,29 @@ def run_self(plan: RunPlan) -> SummaryRow:
         raise
     except DepthAnalysisError as e:
         logger.error(f"Depth analysis failed: {e}")
+        # Detect reuse and extract ref accession
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        ref_accession = extract_ref_accession(plan.paths.assembly)
+        
         # Return summary with depth analysis failure
-        return SummaryRow(
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=plan.paths.assembly.name if plan.paths.assembly else "unknown",
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=0,
             genome_length=0,
-            breadth_10x=0.0,
-            mean_depth=0.0,
-            mapping_rate=0.0,
-            ambiguous_sites=0,
-            ref_calls=0,
-            alt_calls=0,
-            no_call=0,
-            qc_warnings=f"depth_analysis_failed:{e}",
+            ambiguous_snv_count=0,
+            ambiguous_indel_count=0,
+            ambiguous_del_count=0,
+            ref_label=plan.paths.assembly.name if plan.paths.assembly else "unknown",
+            ref_accession=ref_accession,
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0
         )
 
 
@@ -628,25 +888,28 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             ref_label = "resolution_failed"
         elif on_fail_action == "skip":
             logger.info(f"Skipping due to reference resolution failure: {e}")
+            # Detect reuse (though unlikely in skip case)
+            reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+            
             # Return a minimal result indicating skip
-            return SummaryRow(
+            return create_summary_row(
                 sample=plan.sample,
                 mode=plan.mode.value,
-                ref_label="SKIPPED",
                 mapper=plan.mapper.value,
                 caller=plan.caller.value,
                 dp_min=plan.thresholds.dp_min,
                 maf_min=plan.thresholds.maf_min,
+                dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
                 callable_bases=0,
                 genome_length=0,
-                breadth_10x=0.0,
-                mean_depth=0.0,
-                mapping_rate=0.0,
-                ambiguous_sites=0,
-                ref_calls=0,
-                alt_calls=0,
-                no_call=0,
-                qc_warnings="reference_resolution_failed",
+                ambiguous_snv_count=0,
+                ambiguous_indel_count=0,
+                ambiguous_del_count=0,
+                ref_label="SKIPPED",
+                ref_accession="NA",
+                reused_bam=reused_bam,
+                reused_vcf=reused_vcf,
+                runtime_sec=0.0
             )
     
     if plan.dry_run:
@@ -660,25 +923,31 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         logger.info(f"  Normalize VCF with bcftools norm (atomize and split multi-allelic sites)")
         logger.info(f"  Count ambiguous sites: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
         
+        # Detect reuse and extract ref accession
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        ref_accession = "NA"
+        if reference_path:
+            ref_accession = extract_ref_accession(reference_path)
+        
         # Return placeholder data for dry run
-        return SummaryRow(
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=ref_label,
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=2750000,  # Reference genome size
             genome_length=2800000,
-            breadth_10x=0.92,
-            mean_depth=23.5,
-            mapping_rate=0.95,
-            ambiguous_sites=67,
-            ref_calls=2749920,
-            alt_calls=13,
-            no_call=80,
-            qc_warnings="",
+            ambiguous_snv_count=67,
+            ambiguous_indel_count=0,
+            ambiguous_del_count=0,
+            ref_label=ref_label,
+            ref_accession=ref_accession,
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0
         )
     
     # Update the plan's reference info
@@ -705,24 +974,27 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     
     # Only proceed if we have a valid reference
     if ref_source == "failed" or not reference_path:
-        return SummaryRow(
+        # Detect reuse
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=ref_label,
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=0,
             genome_length=0,
-            breadth_10x=0.0,
-            mean_depth=0.0,
-            mapping_rate=0.0,
-            ambiguous_sites=0,
-            ref_calls=0,
-            alt_calls=0,
-            no_call=0,
-            qc_warnings="reference_resolution_failed",
+            ambiguous_snv_count=0,
+            ambiguous_indel_count=0,
+            ambiguous_del_count=0,
+            ref_label=ref_label,
+            ref_accession="NA",
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0
         )
     
     try:
@@ -952,24 +1224,57 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                 output_path=multiqc_output_path
             )
         
-        return SummaryRow(
+        # Calculate variant counts by type
+        _, grid = count_ambiguous_sites(
+            vcf_path=normalized_vcf_path,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+            included_contigs=included_contigs,
+            variant_classes=[VariantClass.SNV]
+        )
+        
+        # Count indels and deletions separately
+        ambiguous_indel_count, _ = count_ambiguous_sites(
+            vcf_path=normalized_vcf_path,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+            included_contigs=included_contigs,
+            variant_classes=[VariantClass.INS]
+        )
+        
+        ambiguous_del_count, _ = count_ambiguous_sites(
+            vcf_path=normalized_vcf_path,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+            included_contigs=included_contigs,
+            variant_classes=[VariantClass.DEL]
+        )
+        
+        # Detect reuse and extract ref accession
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        ref_accession = extract_ref_accession(reference_path) if reference_path else "NA"
+        
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=ref_label,
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=callable_bases,
             genome_length=genome_length,
-            breadth_10x=breadth_10x,
-            mean_depth=mean_depth,
-            mapping_rate=mapping_rate,       # Calculated from BAM stats
-            ambiguous_sites=ambiguous_snv_count,
-            ref_calls=ref_calls,
-            alt_calls=all_variants_count,
-            no_call=genome_length - callable_bases if genome_length > callable_bases else 0,
-            qc_warnings=qc_warnings,
+            ambiguous_snv_count=ambiguous_snv_count,
+            ambiguous_indel_count=ambiguous_indel_count,
+            ambiguous_del_count=ambiguous_del_count,
+            ref_label=ref_label,
+            ref_accession=ref_accession,
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0  # TODO: Add proper runtime tracking
         )
         
     except (ExternalToolError, MappingError) as e:
@@ -977,49 +1282,79 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         raise
     except DepthAnalysisError as e:
         logger.error(f"Depth analysis failed: {e}")
+        # Detect reuse and extract ref accession
+        reused_bam, reused_vcf = detect_reuse_from_plan(plan)
+        ref_accession = extract_ref_accession(reference_path) if reference_path else "NA"
+        
         # Return summary with depth analysis failure
-        return SummaryRow(
+        return create_summary_row(
             sample=plan.sample,
             mode=plan.mode.value,
-            ref_label=ref_label,
             mapper=plan.mapper.value,
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
+            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
             callable_bases=0,
             genome_length=0,
-            breadth_10x=0.0,
-            mean_depth=0.0,
-            mapping_rate=0.0,
-            ambiguous_sites=0,
-            ref_calls=0,
-            alt_calls=0,
-            no_call=0,
-            qc_warnings=f"depth_analysis_failed:{e}",
+            ambiguous_snv_count=0,
+            ambiguous_indel_count=0,
+            ambiguous_del_count=0,
+            ref_label=ref_label,
+            ref_accession=ref_accession,
+            reused_bam=reused_bam,
+            reused_vcf=reused_vcf,
+            runtime_sec=0.0
         )
 
 
 def run_summarize(
-    input_files: List[Path],
+    vcf: Path,
+    bam: Path,
     output: Optional[Path] = None,
-    mode: str = "combined",
+    dp_min: int = 10,
+    maf_min: float = 0.1,
+    dp_cap: int = 100,
+    require_pass: bool = False,
+    emit_vcf: bool = False,
+    emit_bed: bool = False,
+    emit_matrix: bool = False,
+    emit_per_contig: bool = False,
+    emit_multiqc: bool = False,
+    emit_provenance: bool = False,
     to_stdout: bool = False,
 ) -> List[SummaryRow]:
     """
     Execute summarize mode.
     
     Args:
-        input_files: List of TSV files to summarize
+        vcf: VCF file to summarize
+        bam: BAM file for denominator calculation
         output: Output file (auto-generated if not provided)
-        mode: Summary mode
+        dp_min: Minimum depth threshold
+        maf_min: Minimum MAF threshold
+        emit_vcf: Emit filtered VCF
+        emit_bed: Emit BED file
+        emit_matrix: Emit variant matrix
+        emit_per_contig: Emit per-contig summary
+        emit_multiqc: Emit MultiQC metrics
         to_stdout: Write to stdout
         
     Returns:
         List of summary rows
     """
-    logger.info(f"Running summarize mode on {len(input_files)} files")
+    logger.info(f"Running summarize mode on VCF: {vcf}, BAM: {bam}")
     
     # TODO: Implement actual summarization logic
+    # This should:
+    # 1. Parse the VCF to identify ambiguous sites
+    # 2. Use the BAM to calculate denominator (callable bases)
+    # 3. Apply thresholds (dp_min, maf_min)
+    # 4. Generate summary statistics
+    # 5. Emit requested output files (VCF, BED, matrix, etc.)
+    
+    logger.warning("Summarize mode implementation is incomplete")
+    
     # For now, return empty list
     return []
 
@@ -1035,6 +1370,12 @@ def execute_plan(plan: RunPlan, **kwargs) -> SummaryRow:
     Returns:
         Summary row with results
     """
+    # Record start time
+    start_time = time.time()
+    
+    # Get tool versions before execution
+    tool_version = get_tool_versions(plan)
+    
     # Execute the appropriate mode
     if plan.mode == Mode.SELF:
         result = run_self(plan)
@@ -1043,12 +1384,19 @@ def execute_plan(plan: RunPlan, **kwargs) -> SummaryRow:
     else:
         raise ValueError(f"Unsupported mode: {plan.mode}")
     
+    # Calculate runtime
+    runtime_sec = time.time() - start_time
+    
+    # Update the result with runtime and tool version
+    result.runtime_sec = runtime_sec
+    result.tool_version = tool_version
+    
     # Handle output
     if plan.to_stdout:
         write_tsv_to_stdout([result])
     else:
         output_file = plan.paths.output_dir / f"{plan.get_sample_prefix()}_ambiguous_summary.tsv"
-        write_tsv_summary(output_file, [result], TSVMode.OVERWRITE)
+        write_tsv_summary(output_file, [result], plan.tsv_mode)
         logger.info(f"Results written to {output_file}")
     
     return result

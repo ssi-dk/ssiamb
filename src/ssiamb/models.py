@@ -136,51 +136,79 @@ class SummaryRow:
     Single row of the ambiguous_summary.tsv output.
     
     Based on spec.md §4.1 - Primary Output Format.
+    Schema: sample, mode, mapper, caller, dp_min, maf_min, dp_cap, denom_policy, callable_bases,
+    genome_length, breadth_10x, ambiguous_snv_count, ambiguous_snv_per_mb,
+    ambiguous_indel_count, ambiguous_del_count,
+    ref_label, ref_accession, bracken_species, bracken_frac, bracken_reads,
+    alias_used, reused_bam, reused_vcf, runtime_sec, tool_version
     """
+    # Core run parameters
     sample: str
-    mode: str
-    ref_label: str
-    mapper: str
-    caller: str
+    mode: str  # self, ref, summarize
+    mapper: str  # minimap2, bwa-mem2
+    caller: str  # bbtools, bcftools
     dp_min: int
     maf_min: float
+    dp_cap: int
+    denom_policy: str  # e.g. "exclude_dups"
     
     # Denominator metrics
     callable_bases: int
     genome_length: int
-    breadth_10x: float
-    mean_depth: float
-    mapping_rate: float
+    breadth_10x: float  # 4 decimal places per spec
     
     # Numerator counts
-    ambiguous_sites: int
-    ref_calls: int
-    alt_calls: int
-    no_call: int
+    ambiguous_snv_count: int
+    ambiguous_snv_per_mb: float  # 2 decimal places per spec
+    ambiguous_indel_count: int
+    ambiguous_del_count: int
     
-    # Optional QC flags (comma-separated warnings)
-    qc_warnings: str = ""
+    # Reference information
+    ref_label: str  # SpeciesKey|Accession or just SpeciesKey
+    ref_accession: str  # GCF_/GCA_ accession or "NA"
+    
+    # Bracken fields (NA if not used)
+    bracken_species: str
+    bracken_frac: float
+    bracken_reads: int
+    
+    # Reuse information
+    alias_used: str  # "NA" if no alias
+    reused_bam: bool
+    reused_vcf: bool
+    
+    # Runtime information
+    runtime_sec: float
+    tool_version: str
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for TSV output."""
         return {
             "sample": self.sample,
             "mode": self.mode,
-            "ref_label": self.ref_label,
             "mapper": self.mapper,
             "caller": self.caller,
             "dp_min": self.dp_min,
             "maf_min": self.maf_min,
+            "dp_cap": self.dp_cap,
+            "denom_policy": self.denom_policy,
             "callable_bases": self.callable_bases,
             "genome_length": self.genome_length,
-            "breadth_10x": self.breadth_10x,
-            "mean_depth": self.mean_depth,
-            "mapping_rate": self.mapping_rate,
-            "ambiguous_sites": self.ambiguous_sites,
-            "ref_calls": self.ref_calls,
-            "alt_calls": self.alt_calls,
-            "no_call": self.no_call,
-            "qc_warnings": self.qc_warnings,
+            "breadth_10x": f"{self.breadth_10x:.4f}",
+            "ambiguous_snv_count": self.ambiguous_snv_count,
+            "ambiguous_snv_per_mb": f"{self.ambiguous_snv_per_mb:.2f}",
+            "ambiguous_indel_count": self.ambiguous_indel_count,
+            "ambiguous_del_count": self.ambiguous_del_count,
+            "ref_label": self.ref_label,
+            "ref_accession": self.ref_accession,
+            "bracken_species": self.bracken_species,
+            "bracken_frac": self.bracken_frac,
+            "bracken_reads": self.bracken_reads,
+            "alias_used": self.alias_used,
+            "reused_bam": self.reused_bam,
+            "reused_vcf": self.reused_vcf,
+            "runtime_sec": self.runtime_sec,
+            "tool_version": self.tool_version,
         }
 
 
@@ -228,6 +256,12 @@ class RunPlan:
     caller: Caller = Caller.BBTOOLS
     depth_tool: DepthTool = DepthTool.MOSDEPTH
     
+    # Tool options
+    bbtools_mem: Optional[str] = None
+    
+    # Calling options
+    require_pass: bool = False
+    
     # Reference information (for ref mode)
     ref_source: str = "unknown"  # "file", "species", "bracken"
     ref_label: str = "unknown"
@@ -240,6 +274,7 @@ class RunPlan:
     emit_provenance: bool = False
     emit_multiqc: bool = False
     to_stdout: bool = False
+    tsv_mode: TSVMode = TSVMode.OVERWRITE
     
     # Runtime options
     threads: int = 1

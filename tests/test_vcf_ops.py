@@ -269,8 +269,8 @@ class TestAmbigGrid:
             with open(output_path) as f:
                 lines = f.readlines()
             
-            # Should have header + 6 data rows (depth 0-5)
-            assert len(lines) == 7
+            # Should have header + 5 data rows (depth 1-5)
+            assert len(lines) == 6
             
             # Check header
             header = lines[0].strip().split('\t')
@@ -831,9 +831,9 @@ class TestMultiQCEmitter:
             lines = content.strip().split('\n')
             data = lines[1].split('\t')
             
-            # SNV per Mb should be 100 * 1,000,000 / 2,000,000 = 50.00
+            # SNV per Mb should be 100 * 1,000,000 / 1,000,000 = 100.00 (per spec: ambiguous_snv_count * 1e6 / callable_bases)
             snv_per_mb = float(data[2])
-            assert abs(snv_per_mb - 50.0) < 0.01
+            assert abs(snv_per_mb - 100.0) < 0.01
 
 
 if __name__ == "__main__":

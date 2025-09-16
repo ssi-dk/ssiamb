@@ -119,7 +119,7 @@ Legend:
   - [x] Insert sites (SNV primary only) and build cumulative counts
   - [x] `count_at(dp_min, maf_min)` returns primary `ambiguous_snv_count`
   - [x] TSV writer for wide matrix (rows=1..100; cols=maf_0..maf_50)
-  - [ ] Gzip compression for matrix output
+  - [x] Gzip compression for matrix output
 - [x] **Acceptance:** Unit tests for bin edges and dp_cap clipping.
 
 ---
