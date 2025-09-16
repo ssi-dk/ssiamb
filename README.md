@@ -4,7 +4,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
 **Author:** Povilas Matusevicius <pmat@ssi.dk>  
-**Repository:** https://github.com/ssi-dk/ssiamb  
+**Repository:** [https://github.com/ssi-dk/ssiamb](https://github.com/ssi-dk/ssiamb)  
 **License:** MIT  
 **Minimum Python:** 3.12+
 
@@ -15,6 +15,7 @@
 ## What are "Ambiguous Sites"?
 
 An ambiguous site is a genomic position with:
+ 
 - **Sufficient coverage**: Depth ≥ `dp_min` (default: 10)
 - **Minor-allele signal**: Minor-allele fraction (MAF) ≥ `maf_min` (default: 0.10)
 
@@ -23,11 +24,13 @@ These metrics are determined from variant calls after normalization and atomizat
 ## Supported Modes
 
 ### Self-mapping Mode (`ssiamb self`)
+
 - **Input**: Reads → Sample's own assembly
 - **Use case**: Analyze heterogeneity against the sample's assembled genome
 - **Mapping space**: Uses the assembly as reference
 
 ### Reference-mapped Mode (`ssiamb ref`)
+
 - **Input**: Reads → Species canonical reference
 - **Use case**: Compare against standardized reference genomes
 - **Reference selection**: Via admin directory or user override
@@ -44,13 +47,26 @@ These metrics are determined from variant calls after normalization and atomizat
 
 ## Installation
 
-> **Note**: This project is currently under development. Installation instructions will be available upon first release.
+This project is under active development. You can install the package for development (editable) from the repository so changes to the source are immediately available:
 
 ```bash
-# Future installation via pip
+# Install in editable/development mode (recommended for contributors)
+pip install -e .
+
+# After editable install you can run the CLI via the console script or module:
+ssiamb --help
+# or
+python -m ssiamb --help
+```
+
+ 
+When a stable release is published the package will also be available via PyPI and Bioconda (example future commands):
+
+```bash
+# Future installation via pip (PyPI)
 pip install ssiamb
 
-# Future installation via conda
+# Future installation via conda (Bioconda)
 conda install -c bioconda ssiamb
 ```
 
@@ -74,9 +90,11 @@ ssiamb self --r1 reads_R1.fastq.gz --r2 reads_R2.fastq.gz --assembly assembly.fn
 ## Output
 
 ### Primary Output
+
 - **`ambiguous_summary.tsv`**: Single-row summary with ambiguous site counts and quality metrics
 
 ### Optional Outputs (via flags)
+
 - **`--emit-vcf`**: Variant calls with ambiguity annotations
 - **`--emit-bed`**: BED file of ambiguous sites
 - **`--emit-matrix`**: Depth×MAF cumulative count matrix
@@ -87,20 +105,42 @@ ssiamb self --r1 reads_R1.fastq.gz --r2 reads_R2.fastq.gz --assembly assembly.fn
 ## Dependencies
 
 ### Required External Tools
-- **Mapping**: minimap2 or bwa-mem2
-- **Variant calling**: BBTools (callvariants.sh) or bcftools
-- **Depth analysis**: mosdepth or samtools
-- **VCF processing**: bcftools (for normalization)
+
+- **Mapping**: `minimap2` or `bwa-mem2`
+- **Variant calling**: `BBTools` (callvariants.sh) or `bcftools`
+- **Depth analysis**: `mosdepth` or `samtools`
+- **VCF processing**: `bcftools` (for normalization)
 
 ### Python Dependencies
+
 - Python 3.12+
-- typer[all]
-- rich
-- pyyaml
-- pandas
+- `typer[all]`, `rich`, `pyyaml`, `pandas`, `numpy`, `pysam`, `biopython`
+
+ 
+Install Python deps in a virtual environment (example):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### Running tests
+
+The project includes a pytest test-suite. Run all tests with:
+
+```bash
+python -m pytest tests/ -v
+```
+
+Contributors should install in editable mode and run the tests before opening PRs.
+
+Test dependencies:
+
 - numpy
 - pysam
 - biopython
+
 
 ## Development Status
 
@@ -113,9 +153,11 @@ This project is currently in active development. The implementation follows a st
 5. ⏳ **Testing & Validation** - Unit tests and integration testing
 6. ⏳ **Packaging & Distribution** - Bioconda, containers, Galaxy tools
 
+ 
 ## Contributing
 
 This project is developed by the SSI team. For questions or contributions, please contact:
+
 - Povilas Matusevicius <pmat@ssi.dk>
 
 ## Citation
