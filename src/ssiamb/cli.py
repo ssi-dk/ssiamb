@@ -160,6 +160,12 @@ def self(
             "--maf-min", help="Minimum minor allele frequency"
         ),
     ] = 0.1,
+    mapq: Annotated[
+        int,
+        typer.Option(
+            "--mapq", help="Minimum mapping quality for depth analysis"
+        ),
+    ] = 30,
     stdout: Annotated[
         bool,
         typer.Option(
@@ -190,6 +196,7 @@ def self(
             caller=caller,
             dp_min=dp_min,
             maf_min=maf_min,
+            mapq=mapq,
             dry_run=dry_run,
             to_stdout=stdout,
         )
@@ -281,6 +288,12 @@ def ref(
             "--maf-min", help="Minimum minor allele frequency"
         ),
     ] = 0.1,
+    mapq: Annotated[
+        int,
+        typer.Option(
+            "--mapq", help="Minimum mapping quality for depth analysis"
+        ),
+    ] = 30,
     ref_dir: Annotated[
         Optional[Path],
         typer.Option(
@@ -323,6 +336,7 @@ def ref(
             caller=caller,
             dp_min=dp_min,
             maf_min=maf_min,
+            mapq=mapq,
             dry_run=dry_run,
             to_stdout=stdout,
             species=species,

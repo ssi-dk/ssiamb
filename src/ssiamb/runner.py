@@ -25,6 +25,9 @@ from .mapping import (
     ensure_indexes_self, map_fastqs, check_external_tools,
     MappingError, ExternalToolError
 )
+from .depth import (
+    analyze_depth, DepthAnalysisError, check_mosdepth_available
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ def create_run_plan(
     caller: str = "bbtools",
     dp_min: int = 10,
     maf_min: float = 0.1,
+    mapq: int = 30,
     dry_run: bool = False,
     to_stdout: bool = False,
     **kwargs,
@@ -63,6 +67,7 @@ def create_run_plan(
         caller: Caller tool name
         dp_min: Minimum depth threshold
         maf_min: Minimum MAF threshold
+        mapq: Minimum mapping quality for depth analysis
         dry_run: Dry run mode
         to_stdout: Write to stdout
         **kwargs: Additional arguments
@@ -95,6 +100,7 @@ def create_run_plan(
     thresholds = Thresholds(
         dp_min=dp_min,
         maf_min=maf_min,
+        mapq_min=mapq,
     )
     
     # Validate mapper and caller
@@ -164,12 +170,13 @@ def run_self(plan: RunPlan) -> SummaryRow:
     
     if plan.dry_run:
         logger.info("DRY RUN - would execute self-mapping pipeline")
-        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools")
+        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools, mosdepth")
         logger.info(f"  Ensure indexes for {plan.paths.assembly} ({plan.mapper.value})")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to {plan.paths.assembly}")
+        logger.info(f"  Run depth analysis with mosdepth (MAPQ≥{plan.thresholds.mapq_min}, depth≥{plan.thresholds.dp_min})")
         logger.info(f"  Using {plan.mapper.value} mapper and {plan.caller.value} caller")
         logger.info(f"  Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
-        logger.info(f"  Output: {plan.sample}.sorted.bam")
+        logger.info(f"  Output: {plan.sample}.sorted.bam, {plan.sample}.depth.mosdepth.summary.txt")
         
         # Return placeholder data for dry run
         return SummaryRow(
@@ -195,9 +202,14 @@ def run_self(plan: RunPlan) -> SummaryRow:
     # Check tool availability
     tools = check_external_tools()
     tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
+    mosdepth_available = check_mosdepth_available()
+    
     if not tools.get(tool_name) or not tools.get('samtools'):
         missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
         raise ExternalToolError(f"Required tools not available: {missing}")
+    
+    if not mosdepth_available:
+        raise ExternalToolError("mosdepth not found in PATH - required for depth analysis")
     
     try:
         # Step 1: Ensure indexes exist for self-mode
@@ -218,8 +230,51 @@ def run_self(plan: RunPlan) -> SummaryRow:
         
         logger.info(f"Mapping completed: {bam_path}")
         
-        # TODO: Continue with depth analysis, variant calling, etc.
-        # For now, return basic results
+        # Step 3: Run depth analysis using mosdepth
+        logger.info("Running depth analysis with mosdepth")
+        try:
+            # Ensure thresholds are properly initialized
+            assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
+            
+            depth_summary = analyze_depth(
+                bam_path=bam_path,
+                output_dir=plan.paths.output_dir,
+                sample_name=plan.sample,
+                mapq_threshold=plan.thresholds.mapq_min,  # Use CLI/config MAPQ threshold
+                depth_threshold=plan.thresholds.dp_min,  # Use CLI dp_min
+                threads=plan.threads
+            )
+            logger.info(f"Depth analysis completed: {depth_summary.genome_length:,} bp genome, "
+                       f"{depth_summary.breadth_10x:.2%} breadth ≥{plan.thresholds.dp_min}x")
+        except DepthAnalysisError as e:
+            logger.error(f"Depth analysis failed: {e}")
+            # Use placeholder values if depth analysis fails
+            depth_summary = None
+            qc_warnings = f"depth_analysis_failed:{e}"
+        
+        # Step 4: Extract metrics for SummaryRow
+        if depth_summary:
+            callable_bases = depth_summary.callable_bases
+            genome_length = depth_summary.genome_length  
+            breadth_10x = depth_summary.breadth_10x
+            mean_depth = depth_summary.mean_depth
+            qc_warnings = ""
+            
+            # Add QC warning if no contigs meet length threshold
+            if depth_summary.included_contigs == 0:
+                qc_warnings = "no_contigs_ge_500bp"
+            elif depth_summary.included_contigs < depth_summary.total_contigs:
+                excluded = depth_summary.total_contigs - depth_summary.included_contigs
+                qc_warnings = f"excluded_{excluded}_short_contigs"
+        else:
+            # Fallback values if depth analysis failed
+            callable_bases = 0
+            genome_length = 0
+            breadth_10x = 0.0
+            mean_depth = 0.0
+            qc_warnings = qc_warnings or "depth_analysis_unavailable"
+        
+        # TODO: Add variant calling and mapping rate calculation
         return SummaryRow(
             sample=plan.sample,
             mode=plan.mode.value,
@@ -228,21 +283,43 @@ def run_self(plan: RunPlan) -> SummaryRow:
             caller=plan.caller.value,
             dp_min=plan.thresholds.dp_min,
             maf_min=plan.thresholds.maf_min,
-            callable_bases=2800000,  # TODO: Calculate from mosdepth
-            genome_length=2900000,   # TODO: Calculate from reference
-            breadth_10x=0.95,        # TODO: Calculate from mosdepth
-            mean_depth=25.0,         # TODO: Calculate from mosdepth
+            callable_bases=callable_bases,
+            genome_length=genome_length,
+            breadth_10x=breadth_10x,
+            mean_depth=mean_depth,
             mapping_rate=0.98,       # TODO: Calculate from BAM stats
             ambiguous_sites=42,      # TODO: Calculate from variant calling
-            ref_calls=2799950,       # TODO: Calculate from variant analysis
+            ref_calls=callable_bases - 50,  # TODO: Calculate from variant analysis
             alt_calls=8,             # TODO: Calculate from variant analysis
             no_call=50,              # TODO: Calculate from variant analysis
-            qc_warnings="",          # TODO: Add QC warnings
+            qc_warnings=qc_warnings,
         )
         
     except (ExternalToolError, MappingError) as e:
         logger.error(f"Self-mapping failed: {e}")
         raise
+    except DepthAnalysisError as e:
+        logger.error(f"Depth analysis failed: {e}")
+        # Return summary with depth analysis failure
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=plan.paths.assembly.name if plan.paths.assembly else "unknown",
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=0,
+            genome_length=0,
+            breadth_10x=0.0,
+            mean_depth=0.0,
+            mapping_rate=0.0,
+            ambiguous_sites=0,
+            ref_calls=0,
+            alt_calls=0,
+            no_call=0,
+            qc_warnings=f"depth_analysis_failed:{e}",
+        )
 
 
 def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
@@ -380,9 +457,32 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         logger.info("DRY RUN - would execute reference-mapping pipeline")
         logger.info(f"  Reference source: {ref_source}")
         logger.info(f"  Reference: {reference_path}")
+        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools, mosdepth")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to reference")
+        logger.info(f"  Run depth analysis with mosdepth (MAPQ≥{plan.thresholds.mapq_min}, depth≥{plan.thresholds.dp_min})")
         logger.info(f"  Using {plan.mapper.value} mapper and {plan.caller.value} caller")
         logger.info(f"  Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
+        
+        # Return placeholder data for dry run
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=ref_label,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=2750000,  # Reference genome size
+            genome_length=2800000,
+            breadth_10x=0.92,
+            mean_depth=23.5,
+            mapping_rate=0.95,
+            ambiguous_sites=67,
+            ref_calls=2749920,
+            alt_calls=13,
+            no_call=80,
+            qc_warnings="",
+        )
     
     # Update the plan's reference info
     plan.ref_source = ref_source
@@ -390,27 +490,145 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     if reference_path:
         plan.paths.reference = reference_path
     
-    # TODO: Implement actual ref-mapping pipeline
-    # For now, return placeholder data
-    return SummaryRow(
-        sample=plan.sample,
-        mode=plan.mode.value,
-        ref_label=ref_label,
-        mapper=plan.mapper.value,
-        caller=plan.caller.value,
-        dp_min=plan.thresholds.dp_min,
-        maf_min=plan.thresholds.maf_min,
-        callable_bases=2750000,  # Reference genome size
-        genome_length=2800000,
-        breadth_10x=0.92,
-        mean_depth=23.5,
-        mapping_rate=0.95,
-        ambiguous_sites=67,
-        ref_calls=2749920,
-        alt_calls=13,
-        no_call=80,
-        qc_warnings="low_mapping_rate" if ref_source != "failed" else "reference_resolution_failed",
-    )
+    # Check tool availability
+    tools = check_external_tools()
+    tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
+    mosdepth_available = check_mosdepth_available()
+    
+    if not tools.get(tool_name) or not tools.get('samtools'):
+        missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
+        raise ExternalToolError(f"Required tools not available: {missing}")
+    
+    if not mosdepth_available:
+        raise ExternalToolError("mosdepth not found in PATH - required for depth analysis")
+    
+    # Only proceed if we have a valid reference
+    if ref_source == "failed" or not reference_path:
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=ref_label,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=0,
+            genome_length=0,
+            breadth_10x=0.0,
+            mean_depth=0.0,
+            mapping_rate=0.0,
+            ambiguous_sites=0,
+            ref_calls=0,
+            alt_calls=0,
+            no_call=0,
+            qc_warnings="reference_resolution_failed",
+        )
+    
+    try:
+        # Step 1: Map reads to reference
+        logger.info(f"Mapping reads to reference using {plan.mapper.value}")
+        bam_path = map_fastqs(
+            mapper=plan.mapper,
+            fasta_path=reference_path,
+            r1_path=plan.paths.r1,
+            r2_path=plan.paths.r2,
+            sample_name=plan.sample,
+            threads=plan.threads,
+            output_path=plan.paths.output_dir / f"{plan.sample}.sorted.bam"
+        )
+        
+        logger.info(f"Mapping completed: {bam_path}")
+        
+        # Step 2: Run depth analysis using mosdepth
+        logger.info("Running depth analysis with mosdepth")
+        try:
+            # Ensure thresholds are properly initialized
+            assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
+            
+            depth_summary = analyze_depth(
+                bam_path=bam_path,
+                output_dir=plan.paths.output_dir,
+                sample_name=plan.sample,
+                mapq_threshold=plan.thresholds.mapq_min,  # Use CLI/config MAPQ threshold
+                depth_threshold=plan.thresholds.dp_min,  # Use CLI dp_min
+                threads=plan.threads
+            )
+            logger.info(f"Depth analysis completed: {depth_summary.genome_length:,} bp genome, "
+                       f"{depth_summary.breadth_10x:.2%} breadth ≥{plan.thresholds.dp_min}x")
+        except DepthAnalysisError as e:
+            logger.error(f"Depth analysis failed: {e}")
+            # Use placeholder values if depth analysis fails
+            depth_summary = None
+            qc_warnings = f"depth_analysis_failed:{e}"
+        
+        # Step 3: Extract metrics for SummaryRow
+        if depth_summary:
+            callable_bases = depth_summary.callable_bases
+            genome_length = depth_summary.genome_length  
+            breadth_10x = depth_summary.breadth_10x
+            mean_depth = depth_summary.mean_depth
+            qc_warnings = ""
+            
+            # Add QC warning if no contigs meet length threshold
+            if depth_summary.included_contigs == 0:
+                qc_warnings = "no_contigs_ge_500bp"
+            elif depth_summary.included_contigs < depth_summary.total_contigs:
+                excluded = depth_summary.total_contigs - depth_summary.included_contigs
+                qc_warnings = f"excluded_{excluded}_short_contigs"
+        else:
+            # Fallback values if depth analysis failed
+            callable_bases = 0
+            genome_length = 0
+            breadth_10x = 0.0
+            mean_depth = 0.0
+            qc_warnings = qc_warnings or "depth_analysis_unavailable"
+        
+        # TODO: Add variant calling and mapping rate calculation
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=ref_label,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=callable_bases,
+            genome_length=genome_length,
+            breadth_10x=breadth_10x,
+            mean_depth=mean_depth,
+            mapping_rate=0.95,       # TODO: Calculate from BAM stats
+            ambiguous_sites=67,      # TODO: Calculate from variant calling
+            ref_calls=callable_bases - 80,  # TODO: Calculate from variant analysis
+            alt_calls=13,            # TODO: Calculate from variant analysis
+            no_call=80,              # TODO: Calculate from variant analysis
+            qc_warnings=qc_warnings,
+        )
+        
+    except (ExternalToolError, MappingError) as e:
+        logger.error(f"Reference-mapping failed: {e}")
+        raise
+    except DepthAnalysisError as e:
+        logger.error(f"Depth analysis failed: {e}")
+        # Return summary with depth analysis failure
+        return SummaryRow(
+            sample=plan.sample,
+            mode=plan.mode.value,
+            ref_label=ref_label,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min,
+            maf_min=plan.thresholds.maf_min,
+            callable_bases=0,
+            genome_length=0,
+            breadth_10x=0.0,
+            mean_depth=0.0,
+            mapping_rate=0.0,
+            ambiguous_sites=0,
+            ref_calls=0,
+            alt_calls=0,
+            no_call=0,
+            qc_warnings=f"depth_analysis_failed:{e}",
+        )
 
 
 def run_summarize(
