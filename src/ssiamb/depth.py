@@ -312,3 +312,47 @@ def get_depth_from_existing_summary(summary_file: Path) -> DepthSummary:
         DepthSummary object with computed statistics
     """
     return parse_mosdepth_summary(summary_file)
+
+
+def list_included_contigs(summary_file: Path, min_len: int = 500) -> Set[str]:
+    """
+    Get set of contig names that meet minimum length threshold.
+    
+    Args:
+        summary_file: Path to .mosdepth.summary.txt file
+        min_len: Minimum contig length threshold
+        
+    Returns:
+        Set of contig names that meet the length threshold
+    """
+    if not summary_file.exists():
+        logger.warning(f"Summary file not found: {summary_file}")
+        return set()
+    
+    try:
+        included_contigs = set()
+        
+        with open(summary_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                fields = line.split('\t')
+                if len(fields) < 4:
+                    continue
+                
+                contig_name = fields[0]
+                try:
+                    contig_length = int(fields[1])
+                    if contig_length >= min_len:
+                        included_contigs.add(contig_name)
+                except (ValueError, IndexError):
+                    continue
+        
+        logger.debug(f"Found {len(included_contigs)} contigs >= {min_len} bp")
+        return included_contigs
+        
+    except Exception as e:
+        logger.error(f"Error reading mosdepth summary {summary_file}: {e}")
+        return set()

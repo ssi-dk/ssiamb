@@ -28,6 +28,13 @@ from .mapping import (
 from .depth import (
     analyze_depth, DepthAnalysisError, check_mosdepth_available
 )
+from .calling import (
+    call_variants, VariantCallingError, check_caller_tools, VariantCallResult
+)
+from .vcf_ops import (
+    normalize_and_split, count_ambiguous_sites, VCFOperationError,
+    VariantClass, check_vcf_tools
+)
 from .version import __version__
 
 logger = logging.getLogger(__name__)
@@ -163,6 +170,11 @@ def run_self(plan: RunPlan) -> SummaryRow:
     """
     logger.info(f"Running self mode for sample {plan.sample}")
     
+    # Initialize variables for error handling
+    ambiguous_snv_count = 0
+    all_variants_count = 0
+    qc_warnings = ""
+    
     # Ensure thresholds are properly initialized
     assert plan.thresholds.dp_min is not None, "dp_min threshold not set"
     assert plan.thresholds.maf_min is not None, "maf_min threshold not set"
@@ -170,13 +182,14 @@ def run_self(plan: RunPlan) -> SummaryRow:
     
     if plan.dry_run:
         logger.info("DRY RUN - would execute self-mapping pipeline")
-        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools, mosdepth")
+        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools, mosdepth, {plan.caller.value}")
         logger.info(f"  Ensure indexes for {plan.paths.assembly} ({plan.mapper.value})")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to {plan.paths.assembly}")
         logger.info(f"  Run depth analysis with mosdepth (MAPQ≥{plan.thresholds.mapq_min}, depth≥{plan.thresholds.dp_min})")
-        logger.info(f"  Using {plan.mapper.value} mapper and {plan.caller.value} caller")
-        logger.info(f"  Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
-        logger.info(f"  Output: {plan.sample}.sorted.bam, {plan.sample}.depth.mosdepth.summary.txt")
+        logger.info(f"  Call variants with {plan.caller.value} (MAPQ≥{plan.thresholds.mapq_min}, BASEQ≥{plan.thresholds.baseq_min})")
+        logger.info(f"  Normalize VCF with bcftools norm (atomize and split multi-allelic sites)")
+        logger.info(f"  Count ambiguous sites: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
+        logger.info(f"  Output: {plan.sample}.sorted.bam, {plan.sample}.mosdepth.summary.txt, {plan.sample}.vcf, {plan.sample}.normalized.vcf.gz")
         
         # Return placeholder data for dry run
         return SummaryRow(
@@ -203,6 +216,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
     tools = check_external_tools()
     tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
     mosdepth_available = check_mosdepth_available()
+    caller_available = check_caller_tools(plan.caller)
     
     if not tools.get(tool_name) or not tools.get('samtools'):
         missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
@@ -210,6 +224,9 @@ def run_self(plan: RunPlan) -> SummaryRow:
     
     if not mosdepth_available:
         raise ExternalToolError("mosdepth not found in PATH - required for depth analysis")
+    
+    if not caller_available:
+        raise ExternalToolError(f"Variant caller {plan.caller.value} tools not found in PATH")
     
     try:
         # Step 1: Ensure indexes exist for self-mode
@@ -252,7 +269,82 @@ def run_self(plan: RunPlan) -> SummaryRow:
             depth_summary = None
             qc_warnings = f"depth_analysis_failed:{e}"
         
-        # Step 4: Extract metrics for SummaryRow
+        # Step 4: Run variant calling
+        logger.info(f"Running variant calling with {plan.caller.value}")
+        try:
+            # Ensure thresholds are properly initialized
+            assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
+            assert plan.thresholds.baseq_min is not None, "baseq_min threshold not set"
+            
+            vcf_path = plan.paths.output_dir / f"{plan.sample}.vcf"
+            variant_result = call_variants(
+                bam_path=bam_path,
+                reference_path=plan.paths.assembly,
+                output_vcf=vcf_path,
+                caller=plan.caller,
+                sample_name=plan.sample,
+                threads=plan.threads,
+                mapq_min=plan.thresholds.mapq_min,
+                baseq_min=plan.thresholds.baseq_min,
+                minallelefraction=0.0,  # Get all variants for analysis
+            )
+            logger.info(f"Variant calling completed: {variant_result.vcf_path}")
+        except VariantCallingError as e:
+            logger.error(f"Variant calling failed: {e}")
+            raise ExternalToolError(f"Variant calling failed: {e}")
+        
+        # Step 5: Normalize VCF and count ambiguous sites
+        logger.info("Normalizing VCF and counting ambiguous sites")
+        try:
+            # Normalize and split VCF
+            normalized_vcf_path = normalize_and_split(
+                vcf_in=variant_result.vcf_path,
+                reference=plan.paths.assembly,
+                output_dir=plan.paths.output_dir
+            )
+            
+            # Get included contigs from depth analysis
+            included_contigs = None
+            if depth_summary:
+                # Use the same contig filtering as depth analysis (≥500 bp)
+                from .depth import list_included_contigs
+                mosdepth_summary = plan.paths.output_dir / f"{plan.sample}.mosdepth.summary.txt"
+                if mosdepth_summary.exists():
+                    included_contigs = list_included_contigs(mosdepth_summary, min_len=500)
+            
+            # Count ambiguous sites (SNVs only for primary count)
+            ambiguous_snv_count, grid = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                dp_cap=100,  # As per spec
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.SNV]
+            )
+            
+            # Count total variant sites by class
+            all_variants_count, _ = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=0,  # Count all variants regardless of thresholds
+                maf_min=0.0,
+                dp_cap=100,
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.SNV, VariantClass.INS, VariantClass.DEL]
+            )
+            
+            logger.info(f"Found {ambiguous_snv_count} ambiguous SNVs, {all_variants_count} total variant sites")
+            
+        except VCFOperationError as e:
+            logger.error(f"VCF analysis failed: {e}")
+            # Use placeholder values if VCF analysis fails
+            ambiguous_snv_count = 0
+            all_variants_count = 0
+            if qc_warnings:
+                qc_warnings += ";vcf_analysis_failed"
+            else:
+                qc_warnings = "vcf_analysis_failed"
+        
+        # Step 6: Extract metrics for SummaryRow
         if depth_summary:
             callable_bases = depth_summary.callable_bases
             genome_length = depth_summary.genome_length  
@@ -274,7 +366,10 @@ def run_self(plan: RunPlan) -> SummaryRow:
             mean_depth = 0.0
             qc_warnings = qc_warnings or "depth_analysis_unavailable"
         
-        # TODO: Add variant calling and mapping rate calculation
+        # TODO: Add mapping rate calculation from BAM stats
+        # Calculate ref_calls (sites that are reference-like, i.e., not variant)
+        ref_calls = callable_bases - all_variants_count if callable_bases > all_variants_count else 0
+        
         return SummaryRow(
             sample=plan.sample,
             mode=plan.mode.value,
@@ -288,10 +383,10 @@ def run_self(plan: RunPlan) -> SummaryRow:
             breadth_10x=breadth_10x,
             mean_depth=mean_depth,
             mapping_rate=0.98,       # TODO: Calculate from BAM stats
-            ambiguous_sites=42,      # TODO: Calculate from variant calling
-            ref_calls=callable_bases - 50,  # TODO: Calculate from variant analysis
-            alt_calls=8,             # TODO: Calculate from variant analysis
-            no_call=50,              # TODO: Calculate from variant analysis
+            ambiguous_sites=ambiguous_snv_count,
+            ref_calls=ref_calls,
+            alt_calls=all_variants_count,
+            no_call=genome_length - callable_bases if genome_length > callable_bases else 0,
             qc_warnings=qc_warnings,
         )
         
@@ -334,6 +429,11 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         Summary row with results
     """
     logger.info(f"Running ref mode for sample {plan.sample}")
+    
+    # Initialize variables for error handling
+    ambiguous_snv_count = 0
+    all_variants_count = 0
+    qc_warnings = ""
     
     # Ensure thresholds are properly initialized
     assert plan.thresholds.dp_min is not None, "dp_min threshold not set"
@@ -457,11 +557,12 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         logger.info("DRY RUN - would execute reference-mapping pipeline")
         logger.info(f"  Reference source: {ref_source}")
         logger.info(f"  Reference: {reference_path}")
-        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools, mosdepth")
+        logger.info(f"  Check tool availability: {plan.mapper.value}, samtools, mosdepth, {plan.caller.value}")
         logger.info(f"  Map {plan.paths.r1} + {plan.paths.r2} to reference")
         logger.info(f"  Run depth analysis with mosdepth (MAPQ≥{plan.thresholds.mapq_min}, depth≥{plan.thresholds.dp_min})")
-        logger.info(f"  Using {plan.mapper.value} mapper and {plan.caller.value} caller")
-        logger.info(f"  Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
+        logger.info(f"  Call variants with {plan.caller.value} (MAPQ≥{plan.thresholds.mapq_min}, BASEQ≥{plan.thresholds.baseq_min})")
+        logger.info(f"  Normalize VCF with bcftools norm (atomize and split multi-allelic sites)")
+        logger.info(f"  Count ambiguous sites: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}")
         
         # Return placeholder data for dry run
         return SummaryRow(
@@ -494,6 +595,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     tools = check_external_tools()
     tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
     mosdepth_available = check_mosdepth_available()
+    caller_available = check_caller_tools(plan.caller)
     
     if not tools.get(tool_name) or not tools.get('samtools'):
         missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
@@ -501,6 +603,9 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     
     if not mosdepth_available:
         raise ExternalToolError("mosdepth not found in PATH - required for depth analysis")
+    
+    if not caller_available:
+        raise ExternalToolError(f"Variant caller {plan.caller.value} tools not found in PATH")
     
     # Only proceed if we have a valid reference
     if ref_source == "failed" or not reference_path:
@@ -561,7 +666,82 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             depth_summary = None
             qc_warnings = f"depth_analysis_failed:{e}"
         
-        # Step 3: Extract metrics for SummaryRow
+        # Step 3: Run variant calling
+        logger.info(f"Running variant calling with {plan.caller.value}")
+        try:
+            # Ensure thresholds are properly initialized
+            assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
+            assert plan.thresholds.baseq_min is not None, "baseq_min threshold not set"
+            
+            vcf_path = plan.paths.output_dir / f"{plan.sample}.vcf"
+            variant_result = call_variants(
+                bam_path=bam_path,
+                reference_path=reference_path,
+                output_vcf=vcf_path,
+                caller=plan.caller,
+                sample_name=plan.sample,
+                threads=plan.threads,
+                mapq_min=plan.thresholds.mapq_min,
+                baseq_min=plan.thresholds.baseq_min,
+                minallelefraction=0.0,  # Get all variants for analysis
+            )
+            logger.info(f"Variant calling completed: {variant_result.vcf_path}")
+        except VariantCallingError as e:
+            logger.error(f"Variant calling failed: {e}")
+            raise ExternalToolError(f"Variant calling failed: {e}")
+        
+        # Step 4: Normalize VCF and count ambiguous sites
+        logger.info("Normalizing VCF and counting ambiguous sites")
+        try:
+            # Normalize and split VCF
+            normalized_vcf_path = normalize_and_split(
+                vcf_in=variant_result.vcf_path,
+                reference=reference_path,
+                output_dir=plan.paths.output_dir
+            )
+            
+            # Get included contigs from depth analysis
+            included_contigs = None
+            if depth_summary:
+                # Use the same contig filtering as depth analysis (≥500 bp)
+                from .depth import list_included_contigs
+                mosdepth_summary = plan.paths.output_dir / f"{plan.sample}.mosdepth.summary.txt"
+                if mosdepth_summary.exists():
+                    included_contigs = list_included_contigs(mosdepth_summary, min_len=500)
+            
+            # Count ambiguous sites (SNVs only for primary count)
+            ambiguous_snv_count, grid = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                dp_cap=100,  # As per spec
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.SNV]
+            )
+            
+            # Count total variant sites by class
+            all_variants_count, _ = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=0,  # Count all variants regardless of thresholds
+                maf_min=0.0,
+                dp_cap=100,
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.SNV, VariantClass.INS, VariantClass.DEL]
+            )
+            
+            logger.info(f"Found {ambiguous_snv_count} ambiguous SNVs, {all_variants_count} total variant sites")
+            
+        except VCFOperationError as e:
+            logger.error(f"VCF analysis failed: {e}")
+            # Use placeholder values if VCF analysis fails
+            ambiguous_snv_count = 0
+            all_variants_count = 0
+            if qc_warnings:
+                qc_warnings += ";vcf_analysis_failed"
+            else:
+                qc_warnings = "vcf_analysis_failed"
+        
+        # Step 5: Extract metrics for SummaryRow
         if depth_summary:
             callable_bases = depth_summary.callable_bases
             genome_length = depth_summary.genome_length  
@@ -583,7 +763,10 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             mean_depth = 0.0
             qc_warnings = qc_warnings or "depth_analysis_unavailable"
         
-        # TODO: Add variant calling and mapping rate calculation
+        # TODO: Add mapping rate calculation from BAM stats
+        # Calculate ref_calls (sites that are reference-like, i.e., not variant)
+        ref_calls = callable_bases - all_variants_count if callable_bases > all_variants_count else 0
+        
         return SummaryRow(
             sample=plan.sample,
             mode=plan.mode.value,
@@ -597,10 +780,10 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             breadth_10x=breadth_10x,
             mean_depth=mean_depth,
             mapping_rate=0.95,       # TODO: Calculate from BAM stats
-            ambiguous_sites=67,      # TODO: Calculate from variant calling
-            ref_calls=callable_bases - 80,  # TODO: Calculate from variant analysis
-            alt_calls=13,            # TODO: Calculate from variant analysis
-            no_call=80,              # TODO: Calculate from variant analysis
+            ambiguous_sites=ambiguous_snv_count,
+            ref_calls=ref_calls,
+            alt_calls=all_variants_count,
+            no_call=genome_length - callable_bases if genome_length > callable_bases else 0,
             qc_warnings=qc_warnings,
         )
         
