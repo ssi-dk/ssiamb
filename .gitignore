@@ -1,0 +1,132 @@
+# -------------------------------
+# Python / Packaging
+# -------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Hatchling / builds / wheels / eggs
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.*
+.python-version
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs / temp
+*.log
+*.tmp
+tmp/
+temp/
+
+# -------------------------------
+# Project-specific outputs
+# -------------------------------
+
+# CLI results and large bioinformatics artifacts (keep fixtures explicitly later)
+ambiguous_summary.tsv
+*.run_provenance.json
+*.multiqc.tsv
+*.per_contig_summary.tsv
+*.variant_matrix.tsv
+*.variant_matrix.tsv.gz
+
+# Mapping / calling intermediates & outputs
+*.bam
+*.bai
+*.cram
+*.crai
+*.sam
+
+*.vcf
+*.vcf.gz
+*.tbi
+*.bcf
+*.bcf.csi
+
+# Reference/index files (admin refs and local)
+refs/
+*.fa
+*.fna
+*.fasta
+*.fa.gz
+*.fna.gz
+*.fasta.gz
+*.fai
+*.gzi
+*.mmi
+*.amb
+*.ann
+*.pac
+*.bwt*
+*.0123
+
+# mosdepth & depth summaries
+*.mosdepth.global.dist.txt
+*.mosdepth.region.dist.txt
+*.mosdepth.summary.txt
+*.per-base.bed.gz
+*.regions.bed.gz
+*.depth.txt
+
+# Other common genomics temps
+*.idx
+*.dict
+*.sai
+*.pileup
+*.tmp.*
+
+# -------------------------------
+# Galaxy / Planemo
+# -------------------------------
+.planemo*
+
+# -------------------------------
+# Conda / Bioconda / Containers
+# -------------------------------
+conda-bld/
+*.conda
+*.tar.bz2
+.mamba/
+.conda/
+
+# -------------------------------
+# LLM agent local notes (do not commit)
+# -------------------------------
+LLM_PRIMER.md
+AGENT_RULES.md
+KICKOFF_PROMPT_TEMPLATE.txt
+SESSION_START_CHECKLIST.md
+CONTEXT_FILES.md
+prompt_plan.md
+spec.md
+todo.md
+
+# -------------------------------
+# Re-include tiny fixtures for tests/docs
+# -------------------------------
+!fixtures/**
