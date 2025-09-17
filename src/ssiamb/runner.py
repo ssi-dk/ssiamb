@@ -32,7 +32,7 @@ from .depth import (
     analyze_depth, DepthAnalysisError, check_mosdepth_available
 )
 from .calling import (
-    call_variants, VariantCallingError, check_caller_tools, VariantCallResult
+    call_variants, VariantCallingError, check_caller_tools, caller_tools_available, VariantCallResult
 )
 from .vcf_ops import (
     normalize_and_split, count_ambiguous_sites, VCFOperationError,
@@ -466,10 +466,14 @@ def run_self(plan: RunPlan) -> SummaryRow:
     tools = check_external_tools()
     tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
     mosdepth_available = check_mosdepth_available()
-    caller_available = check_caller_tools(plan.caller)
+    caller_available = caller_tools_available(plan.caller)
     
-    if not tools.get(tool_name) or not tools.get('samtools'):
-        missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
+    if not tools.get(tool_name, {}).get('available', False) or not tools.get('samtools', {}).get('available', False):
+        missing = []
+        for t in [tool_name, 'samtools']:
+            if not tools.get(t, {}).get('available', False):
+                version_info = tools.get(t, {}).get('version', 'unknown')
+                missing.append(f"{t} ({version_info})")
         raise ExternalToolError(f"Required tools not available: {missing}")
     
     if not mosdepth_available:
@@ -559,6 +563,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
                 mapq_min=plan.thresholds.mapq_min,
                 baseq_min=plan.thresholds.baseq_min,
                 minallelefraction=0.0,  # Get all variants for analysis
+                bbtools_mem=plan.bbtools_mem,
             )
             logger.info(f"Variant calling completed: {variant_result.vcf_path}")
         except VariantCallingError as e:
@@ -997,10 +1002,14 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     tools = check_external_tools()
     tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
     mosdepth_available = check_mosdepth_available()
-    caller_available = check_caller_tools(plan.caller)
+    caller_available = caller_tools_available(plan.caller)
     
-    if not tools.get(tool_name) or not tools.get('samtools'):
-        missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
+    if not tools.get(tool_name, {}).get('available', False) or not tools.get('samtools', {}).get('available', False):
+        missing = []
+        for t in [tool_name, 'samtools']:
+            if not tools.get(t, {}).get('available', False):
+                version_info = tools.get(t, {}).get('version', 'unknown')
+                missing.append(f"{t} ({version_info})")
         raise ExternalToolError(f"Required tools not available: {missing}")
     
     if not mosdepth_available:
@@ -1111,6 +1120,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                 mapq_min=plan.thresholds.mapq_min,
                 baseq_min=plan.thresholds.baseq_min,
                 minallelefraction=0.0,  # Get all variants for analysis
+                bbtools_mem=plan.bbtools_mem,
             )
             logger.info(f"Variant calling completed: {variant_result.vcf_path}")
         except VariantCallingError as e:

@@ -378,9 +378,9 @@ class TestMappingEdgeCases:
     def test_missing_tools_error_handling(self, mock_check):
         """Test handling when mapping tools are not available."""
         mock_check.return_value = {
-            'minimap2': False,
-            'bwa-mem2': False,
-            'samtools': False
+            'minimap2': {'available': False, 'version': 'not found in PATH'},
+            'bwa-mem2': {'available': False, 'version': 'not found in PATH'},
+            'samtools': {'available': False, 'version': 'not found in PATH'}
         }
         
         # Create a real temporary file to avoid the FileNotFoundError

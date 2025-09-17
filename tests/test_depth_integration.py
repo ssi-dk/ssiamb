@@ -139,18 +139,65 @@ class TestDepthRealData:
     
     def test_real_depth_analysis_end_to_end(self, real_bam_with_index):
         """Test complete depth analysis pipeline with real data."""
-        # Skip this test due to current mosdepth command issue  
-        pytest.skip("analyze_depth function has mosdepth command issue")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            sample_name = "test_sample"
+            
+            try:
+                # Run depth analysis
+                summary = analyze_depth(real_bam_with_index, output_dir, sample_name)
+                
+                # Verify we got a valid summary
+                assert isinstance(summary, DepthSummary)
+                assert summary.callable_bases >= 0
+                assert summary.genome_length > 0
+                assert summary.total_contigs > 0
+                
+                print(f"\\nEnd-to-end depth analysis results:")
+                print(f"  Callable bases: {summary.callable_bases:,}")
+                print(f"  Genome length: {summary.genome_length:,}")
+                print(f"  Breadth 10x: {summary.breadth_10x:.3f}")
+                print(f"  Mean depth: {summary.mean_depth:.2f}")
+                
+            except Exception as e:
+                print(f"Error in analyze_depth: {e}")
+                raise
     
     def test_contig_filtering_real_data(self, real_bam_with_index):
         """Test that contig filtering works correctly with real data."""
-        # Skip this test due to current mosdepth command issue
-        pytest.skip("analyze_depth function has mosdepth command issue")
+        # This test was previously skipped but mosdepth issues have been fixed
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            sample_name = "test_sample"
+            
+            # Run depth analysis with MAPQ=0 since test BAM has reads with MAPQ=0
+            summary = analyze_depth(real_bam_with_index, output_dir, sample_name, mapq_threshold=0)
+            
+            # Test should verify contig filtering works
+            assert summary is not None
+            assert hasattr(summary, 'callable_bases')
+            assert summary.callable_bases > 0
     
     def test_depth_metrics_consistency(self, real_bam_with_index):
         """Test that depth metrics are internally consistent."""
-        # Skip this test due to current mosdepth command issue
-        pytest.skip("analyze_depth function has mosdepth command issue")
+        # This test was previously skipped but mosdepth issues have been fixed
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            sample_name = "test_sample"
+            
+            # Run depth analysis
+            summary = analyze_depth(real_bam_with_index, output_dir, sample_name)
+            
+            # Test metric consistency
+            assert summary is not None
+            assert hasattr(summary, 'callable_bases')
+            assert hasattr(summary, 'genome_length')
+            assert hasattr(summary, 'mean_depth')
+            
+            # Callable bases should be <= genome length
+            assert summary.callable_bases <= summary.genome_length
+            # Mean depth should be non-negative
+            assert summary.mean_depth >= 0
 
 
 class TestDepthEdgeCases:

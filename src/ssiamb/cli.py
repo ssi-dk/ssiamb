@@ -127,7 +127,7 @@ def self(
     output_dir: Annotated[
         Optional[Path],
         typer.Option(
-            "--output-dir", "-o", help="Output directory (default: current)"
+            "--outdir", "-o", help="Output directory (default: current)"
         ),
     ] = None,
     threads: Annotated[
@@ -346,7 +346,7 @@ def ref(
     output_dir: Annotated[
         Optional[Path],
         typer.Option(
-            "--output-dir", "-o", help="Output directory (default: current)"
+            "--outdir", "-o", help="Output directory (default: current)"
         ),
     ] = None,
     threads: Annotated[

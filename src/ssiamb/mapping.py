@@ -29,23 +29,63 @@ class ExternalToolError(Exception):
     pass
 
 
-def check_external_tools() -> Dict[str, bool]:
+def check_external_tools() -> Dict[str, Dict[str, str]]:
     """
-    Check availability of external mapping tools.
+    Check availability and versions of external mapping tools.
     
     Returns:
-        Dictionary mapping tool names to availability status
+        Dictionary mapping tool names to availability and version info.
+        Each tool entry contains:
+        - 'available': boolean status
+        - 'version': version string if available, or error message
         
     Examples:
         >>> tools = check_external_tools()
-        >>> if not tools['minimap2']:
+        >>> if not tools['minimap2']['available']:
         ...     raise ExternalToolError("minimap2 not found")
+        >>> print(f"minimap2 version: {tools['minimap2']['version']}")
     """
     tools = {}
     
-    for tool in ['minimap2', 'bwa-mem2', 'samtools']:
-        tools[tool] = shutil.which(tool) is not None
-        logger.debug(f"Tool {tool}: {'available' if tools[tool] else 'missing'}")
+    # Define tools and their version commands
+    tool_commands = {
+        'minimap2': ['minimap2', '--version'],
+        'bwa-mem2': ['bwa-mem2', 'version'],
+        'samtools': ['samtools', '--version']
+    }
+    
+    for tool, version_cmd in tool_commands.items():
+        tools[tool] = {'available': False, 'version': 'unknown'}
+        
+        # Check if tool is in PATH
+        if shutil.which(tool) is None:
+            tools[tool]['version'] = 'not found in PATH'
+            logger.debug(f"Tool {tool}: not found")
+            continue
+            
+        # Try to get version
+        try:
+            result = subprocess.run(
+                version_cmd,
+                capture_output=True,
+                text=True,
+                timeout=5  # Prevent hanging
+            )
+            if result.returncode == 0:
+                tools[tool]['available'] = True
+                # Extract version from output (first line typically)
+                version_line = result.stdout.strip().split('\n')[0] if result.stdout else 'version check succeeded'
+                tools[tool]['version'] = version_line
+                logger.debug(f"Tool {tool}: available, version: {version_line}")
+            else:
+                tools[tool]['version'] = f'version check failed (exit {result.returncode})'
+                logger.debug(f"Tool {tool}: found but version check failed")
+        except subprocess.TimeoutExpired:
+            tools[tool]['version'] = 'version check timed out'
+            logger.debug(f"Tool {tool}: found but version check timed out")
+        except Exception as e:
+            tools[tool]['version'] = f'version check error: {e}'
+            logger.debug(f"Tool {tool}: found but version check error: {e}")
     
     return tools
 
@@ -123,8 +163,9 @@ def ensure_indexes_self(fasta_path: Path, mapper: Mapper) -> None:
     # Check tool availability
     tools = check_external_tools()
     tool_name = mapper.value  # Use the actual tool name without modification
-    if not tools.get(tool_name):
-        raise ExternalToolError(f"{tool_name} not found in PATH")
+    if not tools.get(tool_name, {}).get('available', False):
+        version_info = tools.get(tool_name, {}).get('version', 'unknown')
+        raise ExternalToolError(f"{tool_name} not available: {version_info}")
     
     logger.info(f"Building {mapper.value} index for {fasta_path}")
     
@@ -226,9 +267,10 @@ def map_fastqs(
     # Check tool availability
     tools = check_external_tools()
     tool_name = mapper.value  # Use the actual tool name without modification
-    if not tools.get(tool_name) or not tools.get('samtools'):
-        missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
-        raise ExternalToolError(f"Required tools not found: {missing}")
+    if not tools.get(tool_name, {}).get('available', False) or not tools.get('samtools', {}).get('available', False):
+        missing = [t for t, info in tools.items() 
+                  if not info.get('available', False) and t in [tool_name, 'samtools']]
+        raise ExternalToolError(f"Required tools not available: {missing}")
     
     # Ensure indexes exist
     ensure_indexes_self(fasta_path, mapper)
@@ -274,7 +316,8 @@ def _map_with_minimap2(
     # minimap2 command: map to SAM, pipe to samtools for sorting
     minimap2_cmd = [
         'minimap2',
-        '-ax', 'sr',           # Short read preset
+        '-x', 'sr',            # Short read preset
+        '-a',                  # Output alignments (required by spec)
         '-t', str(threads),    # Threads
         '-R', read_group,      # Read group
         str(index_path),       # Index file

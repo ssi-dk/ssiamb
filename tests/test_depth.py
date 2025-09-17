@@ -135,7 +135,6 @@ class TestRunMosdepth:
             call_args = mock_run.call_args[0][0]
             assert call_args[0] == 'mosdepth'
             assert '--mapq' in call_args
-            assert '--thresholds' in call_args
             assert '--no-per-base' in call_args
 
 
@@ -239,7 +238,6 @@ class TestAnalyzeDepth:
                 bam_path=bam_path,
                 output_prefix=Path(temp_dir) / "test_sample.depth",
                 mapq_threshold=30,
-                depth_threshold=10,
                 threads=4
             )
             mock_parse.assert_called_once_with(summary_file)

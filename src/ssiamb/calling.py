@@ -9,7 +9,7 @@ import logging
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from dataclasses import dataclass
 
 from .models import Caller
@@ -30,6 +30,73 @@ class VariantCallResult:
     success: bool
     error_message: Optional[str] = None
     runtime_seconds: Optional[float] = None
+
+
+def check_caller_tools_detailed(caller: Caller) -> Dict[str, Dict[str, str]]:
+    """
+    Check availability and versions of required tools for the specified caller.
+    
+    Args:
+        caller: Variant caller to check
+        
+    Returns:
+        Dictionary mapping tool names to availability and version info.
+        Each tool entry contains:
+        - 'available': boolean status
+        - 'version': version string if available, or error message
+    """
+    tools = {}
+    
+    if caller == Caller.BBTOOLS:
+        # Check for BBTools executables
+        for tool in ["pileup.sh", "callvariants.sh"]:
+            tools[tool] = {'available': False, 'version': 'unknown'}
+            
+            if shutil.which(tool) is None:
+                tools[tool]['version'] = 'not found in PATH'
+                logger.debug(f"Tool {tool}: not found")
+                continue
+                
+            # BBTools scripts typically don't have version commands, so just mark as available
+            tools[tool]['available'] = True
+            tools[tool]['version'] = 'BBTools (version check not supported)'
+            logger.debug(f"Tool {tool}: available")
+            
+    elif caller == Caller.BCFTOOLS:
+        # Check for bcftools
+        tools['bcftools'] = {'available': False, 'version': 'unknown'}
+        
+        if shutil.which("bcftools") is None:
+            tools['bcftools']['version'] = 'not found in PATH'
+            logger.debug("Tool bcftools: not found")
+        else:
+            # Try to get bcftools version
+            try:
+                result = subprocess.run(
+                    ['bcftools', '--version'],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    tools['bcftools']['available'] = True
+                    # Extract version from output (first line typically)
+                    version_line = result.stdout.strip().split('\n')[0] if result.stdout else 'version check succeeded'
+                    tools['bcftools']['version'] = version_line
+                    logger.debug(f"Tool bcftools: available, version: {version_line}")
+                else:
+                    tools['bcftools']['version'] = f'version check failed (exit {result.returncode})'
+                    logger.debug("Tool bcftools: found but version check failed")
+            except subprocess.TimeoutExpired:
+                tools['bcftools']['version'] = 'version check timed out'
+                logger.debug("Tool bcftools: found but version check timed out")
+            except Exception as e:
+                tools['bcftools']['version'] = f'version check error: {e}'
+                logger.debug(f"Tool bcftools: found but version check error: {e}")
+    else:
+        raise ValueError(f"Unknown caller: {caller}")
+    
+    return tools
 
 
 def check_caller_tools(caller: Caller) -> bool:
@@ -53,6 +120,20 @@ def check_caller_tools(caller: Caller) -> bool:
         raise ValueError(f"Unknown caller: {caller}")
 
 
+def caller_tools_available(caller: Caller) -> bool:
+    """
+    Check if all required tools for the specified caller are available.
+    
+    Args:
+        caller: Variant caller to check
+        
+    Returns:
+        True if all required tools are available, False otherwise
+    """
+    tools = check_caller_tools_detailed(caller)
+    return all(tool_info.get('available', False) for tool_info in tools.values())
+
+
 def run_bbtools_calling(
     bam_path: Path,
     reference_path: Path,
@@ -62,13 +143,13 @@ def run_bbtools_calling(
     mapq_min: int = 20,
     baseq_min: int = 20,
     minallelefraction: float = 0.0,
+    bbtools_mem: Optional[str] = None,
 ) -> VariantCallResult:
     """
     Run BBTools variant calling pipeline.
     
     Executes:
-    1. pileup.sh minmapq=X
-    2. callvariants.sh ploidy=1 clearfilters=t minallelefraction=Z minavgmapq=X minquality=Y
+    1. callvariants.sh directly with BAM input (no pileup step needed)
     
     Args:
         bam_path: Input BAM file
@@ -79,6 +160,7 @@ def run_bbtools_calling(
         mapq_min: Minimum mapping quality
         baseq_min: Minimum base quality
         minallelefraction: Minimum allele fraction for variant calling
+        bbtools_mem: BBTools heap memory (e.g., '4g', '8g')
         
     Returns:
         VariantCallResult with execution details
@@ -90,51 +172,23 @@ def run_bbtools_calling(
         # Ensure output directory exists
         output_vcf.parent.mkdir(parents=True, exist_ok=True)
         
-        # Step 1: Run pileup.sh
-        pileup_out = output_vcf.with_suffix('.var')
-        
-        pileup_cmd = [
-            "pileup.sh",
-            f"in={bam_path}",
-            f"ref={reference_path}",
-            f"out={pileup_out}",
-            f"minmapq={mapq_min}",
-            f"threads={threads}",
-        ]
-        
-        logger.info(f"Running BBTools pileup: {' '.join(map(str, pileup_cmd))}")
-        
-        result = subprocess.run(
-            pileup_cmd,
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        
-        if result.returncode != 0:
-            error_msg = f"BBTools pileup failed (exit {result.returncode}): {result.stderr}"
-            logger.error(error_msg)
-            return VariantCallResult(
-                vcf_path=output_vcf,
-                caller=Caller.BBTOOLS,
-                success=False,
-                error_message=error_msg,
-                runtime_seconds=time.time() - start_time
-            )
-        
-        # Step 2: Run callvariants.sh
+        # Run callvariants.sh directly with BAM input (simpler approach)
         callvariants_cmd = [
             "callvariants.sh",
-            f"in={pileup_out}",
+            f"in={bam_path}",
             f"ref={reference_path}",
-            f"out={output_vcf}",
-            "ploidy=1",
-            "clearfilters=t",  # Clear all filters to get raw variants
+            f"vcf={output_vcf}",           # Use vcf= for VCF output
+            "ploidy=1",                   # Haploid organism
+            "clearfilters=t",             # Clear all filters to get raw variants
             f"minallelefraction={minallelefraction}",
             f"minavgmapq={mapq_min}",
             f"minquality={baseq_min}",
             f"threads={threads}",
         ]
+        
+        # Add memory setting if provided
+        if bbtools_mem:
+            callvariants_cmd.append(f"-Xmx{bbtools_mem}")
         
         logger.info(f"Running BBTools callvariants: {' '.join(map(str, callvariants_cmd))}")
         
@@ -142,7 +196,8 @@ def run_bbtools_calling(
             callvariants_cmd,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
+            timeout=3600  # 1 hour timeout
         )
         
         if result.returncode != 0:
@@ -156,16 +211,12 @@ def run_bbtools_calling(
                 runtime_seconds=time.time() - start_time
             )
         
-        # Clean up intermediate file
-        try:
-            if pileup_out.exists():
-                pileup_out.unlink()
-        except OSError:
-            # Ignore cleanup errors
-            pass
+        # Log stdout for debugging
+        if result.stdout:
+            logger.debug(f"BBTools callvariants stdout: {result.stdout.strip()}")
         
         # Verify output VCF was created
-        if not output_vcf.exists():
+        if not output_vcf.exists() or output_vcf.stat().st_size == 0:
             error_msg = "BBTools callvariants completed but no VCF output found"
             logger.error(error_msg)
             return VariantCallResult(
@@ -184,6 +235,16 @@ def run_bbtools_calling(
             runtime_seconds=time.time() - start_time
         )
         
+    except subprocess.TimeoutExpired:
+        error_msg = "BBTools variant calling timed out"
+        logger.error(error_msg)
+        return VariantCallResult(
+            vcf_path=output_vcf,
+            caller=Caller.BBTOOLS,
+            success=False,
+            error_message=error_msg,
+            runtime_seconds=time.time() - start_time
+        )
     except Exception as e:
         error_msg = f"BBTools variant calling failed with exception: {e}"
         logger.error(error_msg)
@@ -234,11 +295,13 @@ def run_bcftools_calling(
         # Combine mpileup and call in a pipeline
         mpileup_cmd = [
             "bcftools", "mpileup",
+            "-Ou",                     # Uncompressed BCF output (required by spec)
             f"--threads", str(threads),
             f"-q", str(mapq_min),      # Minimum mapping quality
             f"-Q", str(baseq_min),     # Minimum base quality
             "-B",                      # Disable BAQ computation
-            "-a", "AD,ADF,ADR,DP",     # Annotations to include
+            "--max-depth", "100000",   # Maximum depth (required by spec)
+            "-a", "FORMAT/AD,ADF,ADR,DP",  # Annotations to include (fixed format)
             "-f", str(reference_path),  # Reference FASTA
             str(bam_path)              # Input BAM
         ]
@@ -248,6 +311,7 @@ def run_bcftools_calling(
             f"--threads", str(threads),
             "-m",                      # Multiallelic caller
             "--ploidy", "1",           # Haploid organism
+            "--prior", "1.1e-3",       # Prior for novel mutation rate (required by spec)
             "-v",                      # Output only variants
             "-o", str(output_vcf)      # Output file
         ]
@@ -342,6 +406,7 @@ def call_variants(
     mapq_min: int = 20,
     baseq_min: int = 20,
     minallelefraction: float = 0.0,
+    bbtools_mem: Optional[str] = None,
 ) -> VariantCallResult:
     """
     Run variant calling with the specified caller.
@@ -356,6 +421,7 @@ def call_variants(
         mapq_min: Minimum mapping quality
         baseq_min: Minimum base quality
         minallelefraction: Minimum allele fraction (BBTools only)
+        bbtools_mem: BBTools heap memory (e.g., '4g', '8g')
         
     Returns:
         VariantCallResult with execution details
@@ -364,7 +430,7 @@ def call_variants(
         VariantCallingError: If caller tools are not available or calling fails
     """
     # Check tool availability
-    if not check_caller_tools(caller):
+    if not caller_tools_available(caller):
         raise VariantCallingError(f"Required tools for {caller.value} are not available")
     
     # Validate inputs
@@ -384,6 +450,7 @@ def call_variants(
             mapq_min=mapq_min,
             baseq_min=baseq_min,
             minallelefraction=minallelefraction,
+            bbtools_mem=bbtools_mem,
         )
     elif caller == Caller.BCFTOOLS:
         result = run_bcftools_calling(
@@ -415,7 +482,7 @@ def get_available_callers() -> List[Caller]:
     available = []
     
     for caller in Caller:
-        if check_caller_tools(caller):
+        if caller_tools_available(caller):
             available.append(caller)
     
     return available

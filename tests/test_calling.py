@@ -53,19 +53,24 @@ class TestBBToolsCalling:
     """Test BBTools variant calling functionality."""
     
     @patch('src.ssiamb.calling.subprocess.run')
-    @patch('src.ssiamb.calling.Path.exists')
-    def test_successful_bbtools_calling(self, mock_exists, mock_run, tmp_path):
+    def test_successful_bbtools_calling(self, mock_run, tmp_path):
         """Test successful BBTools variant calling pipeline."""
         # Setup paths
         bam_path = tmp_path / "test.bam"
         ref_path = tmp_path / "ref.fasta"
         output_vcf = tmp_path / "output.vcf"
         
-        # Mock file existence
-        mock_exists.side_effect = lambda: True
+        # Create real files so Path.exists() and Path.stat() work properly
+        bam_path.write_bytes(b"dummy bam content")
+        ref_path.write_text("dummy fasta content")
         
-        # Mock successful subprocess calls
-        mock_run.return_value = Mock(returncode=0, stderr="")
+        # Mock successful subprocess call - also create the output file
+        def mock_subprocess(*args, **kwargs):
+            # Create the output VCF file as if the tool did it
+            output_vcf.write_text("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
+            return Mock(returncode=0, stderr="", stdout="")
+        
+        mock_run.side_effect = mock_subprocess
         
         # Run BBTools calling
         result = run_bbtools_calling(
@@ -85,8 +90,8 @@ class TestBBToolsCalling:
         assert result.error_message is None
         assert result.runtime_seconds is not None
         
-        # Check that both commands were called
-        assert mock_run.call_count == 2
+        # Check that callvariants was called once (new implementation)
+        assert mock_run.call_count == 1
     
     @patch('src.ssiamb.calling.subprocess.run')
     def test_bbtools_pileup_failure(self, mock_run, tmp_path):
@@ -110,7 +115,7 @@ class TestBBToolsCalling:
         # Check result indicates failure
         assert result.success is False
         assert result.error_message is not None
-        assert "BBTools pileup failed" in result.error_message
+        assert "BBTools callvariants failed" in result.error_message
 
 
 class TestCallVariants:
@@ -148,15 +153,19 @@ class TestCallVariants:
         assert result.caller == Caller.BBTOOLS
         mock_bbtools.assert_called_once()
     
-    @patch('src.ssiamb.calling.check_caller_tools')
-    def test_call_variants_tools_unavailable(self, mock_check_tools, tmp_path):
+    @patch('src.ssiamb.calling.caller_tools_available')
+    def test_call_variants_tools_unavailable(self, mock_tools_available, tmp_path):
         """Test call_variants when caller tools are not available."""
-        # Setup
+        # Setup - create dummy files
         bam_path = tmp_path / "test.bam"
         ref_path = tmp_path / "ref.fasta"
         output_vcf = tmp_path / "output.vcf"
         
-        mock_check_tools.return_value = False
+        # Create dummy files
+        bam_path.write_bytes(b"dummy bam")
+        ref_path.write_text("dummy fasta")
+        
+        mock_tools_available.return_value = False
         
         # Should raise VariantCallingError
         with pytest.raises(VariantCallingError, match="Required tools.*not available"):
@@ -172,10 +181,10 @@ class TestCallVariants:
 class TestGetAvailableCallers:
     """Test the get_available_callers function."""
     
-    @patch('src.ssiamb.calling.check_caller_tools')
-    def test_get_available_callers_all_available(self, mock_check_tools):
+    @patch('src.ssiamb.calling.caller_tools_available')
+    def test_get_available_callers_all_available(self, mock_tools_available):
         """Test when all callers are available."""
-        mock_check_tools.return_value = True
+        mock_tools_available.return_value = True
         
         available = get_available_callers()
         
@@ -183,10 +192,10 @@ class TestGetAvailableCallers:
         assert Caller.BBTOOLS in available
         assert Caller.BCFTOOLS in available
     
-    @patch('src.ssiamb.calling.check_caller_tools')
-    def test_get_available_callers_none(self, mock_check_tools):
+    @patch('src.ssiamb.calling.caller_tools_available')
+    def test_get_available_callers_none(self, mock_tools_available):
         """Test when no callers are available."""
-        mock_check_tools.return_value = False
+        mock_tools_available.return_value = False
         
         available = get_available_callers()
         

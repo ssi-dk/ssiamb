@@ -45,6 +45,14 @@ class TestVCFOperationsRealData:
             pytest.skip("Multi-sample VCF fixture not available")
         return path
     
+    @pytest.fixture
+    def reference_fasta_path(self):
+        """Path to reference FASTA fixture."""
+        path = Path("fixtures/ref_mode/reference.fna")
+        if not path.exists():
+            pytest.skip("Reference FASTA fixture not available")
+        return path
+    
     def test_parse_real_production_vcf(self, real_vcf_path):
         """Test parsing real SSI production VCF file."""
         sites = list(parse_vcf_sites(real_vcf_path))
@@ -127,19 +135,22 @@ class TestVCFOperationsRealData:
         cumulative = grid.build_cumulative()
         assert cumulative.shape == (101, 51)  # dp_cap+1, maf_bins
     
-    def test_normalize_and_split_real_variants(self, real_vcf_path):
-        """Test normalization and splitting on real variant records."""
-        import pysam
+    def test_normalize_and_split_real_variants(self, real_vcf_path, reference_fasta_path, tmp_path):
+        """Test normalization and splitting with real data - expects mismatch error."""
         
-        # Skip this test as it requires reference genome
-        pytest.skip("Normalization requires reference genome not available in test")
+        # The test VCF and reference don't match (different assemblies/contigs)
+        # This test verifies that normalization correctly fails with informative error
+        # when VCF contigs don't match reference sequences
+        with pytest.raises(VCFOperationError) as exc_info:
+            normalize_and_split(
+                vcf_in=real_vcf_path,
+                reference=reference_fasta_path,
+                output_dir=tmp_path
+            )
         
-        # This would test normalize_and_split if we had reference
-        # with pysam.VariantFile(str(real_vcf_path)) as vcf_file:
-        #     for record in vcf_file:
-        #         if record.alts and record.alts[0] is not None:
-        #             # Would call normalize_and_split(vcf_in, reference)
-        #             break
+        # Verify error message indicates sequence/contig mismatch
+        error_msg = str(exc_info.value)
+        assert "sequence" in error_msg.lower() and "not found" in error_msg.lower()
     
     def test_output_generation_real_data(self, real_vcf_path, tmp_path):
         """Test output file generation with real data."""
@@ -187,8 +198,13 @@ class TestVCFOperationsRealData:
             pytest.skip("Malformed VCF fixture not available")
         
         # Should handle malformed VCF gracefully by raising VCFOperationError
-        with pytest.raises(VCFOperationError):
-            list(parse_vcf_sites(malformed_vcf))
+        # The malformed VCF contains valid records (which may generate MAF warnings)
+        # followed by malformed records that cause parsing to fail
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)  # Suppress MAF warnings from valid records
+            with pytest.raises(VCFOperationError):
+                list(parse_vcf_sites(malformed_vcf))
 
 
 class TestVCFPerformanceRealData:

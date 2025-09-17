@@ -229,28 +229,33 @@ class TestReuseRealData:
     def test_markdup_integration_real_bam(self, real_bam_path):
         """Test markdup integration with real BAM file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = Path(tmpdir) / "marked_duplicates.bam"
+            output_dir = Path(tmpdir)  # Pass directory, not a file path
             
-            try:
-                result_path = run_markdup_for_depth(real_bam_path, output_path)
+            result_path = run_markdup_for_depth(real_bam_path, output_dir)
+            
+            # Should create output file
+            assert result_path.exists()
+            assert result_path.stat().st_size > 0
+            
+            # Should be a valid BAM file
+            import pysam
+            with pysam.AlignmentFile(str(result_path)) as f:
+                # Should be readable
+                assert f.header is not None
                 
-                # Should create output file
-                assert result_path.exists()
-                assert result_path.stat().st_size > 0
+                # Check that some reads are marked as duplicates
+                duplicates = 0
+                total = 0
+                for read in f:
+                    total += 1
+                    if read.is_duplicate:
+                        duplicates += 1
+                    if total >= 1000:  # Check first 1000 reads
+                        break
                 
-                # Should be a valid BAM file
-                with pytest.raises(Exception):  # May fail due to samtools not available
-                    import pysam
-                    with pysam.AlignmentFile(str(result_path)) as f:
-                        # Should be readable
-                        assert f.header is not None
-                        
-            except Exception as e:
-                # If samtools is not available, skip this test
-                if "samtools" in str(e).lower():
-                    pytest.skip("samtools not available for markdup test")
-                else:
-                    raise
+                # Should have found some duplicates (though may be rare in small sample)
+                assert total > 0, "Should have reads in the output BAM"
+                # Note: duplicates may be 0 in small samples, that's normal
 
 
 class TestReuseEdgeCases:

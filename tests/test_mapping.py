@@ -35,9 +35,9 @@ class TestExternalToolDetection:
         
         tools = check_external_tools()
         
-        assert tools['minimap2'] is True
-        assert tools['bwa-mem2'] is True
-        assert tools['samtools'] is True
+        assert tools['minimap2']['available'] is True
+        assert tools['bwa-mem2']['available'] is True
+        assert tools['samtools']['available'] is True
         assert len(tools) == 3
     
     @patch('src.ssiamb.mapping.shutil.which')
@@ -50,9 +50,9 @@ class TestExternalToolDetection:
         
         tools = check_external_tools()
         
-        assert tools['minimap2'] is True
-        assert tools['bwa-mem2'] is False
-        assert tools['samtools'] is True
+        assert tools['minimap2']['available'] is True
+        assert tools['bwa-mem2']['available'] is False
+        assert tools['samtools']['available'] is True
     
     @patch('src.ssiamb.mapping.shutil.which')
     def test_check_external_tools_all_missing(self, mock_which):
@@ -61,9 +61,9 @@ class TestExternalToolDetection:
         
         tools = check_external_tools()
         
-        assert tools['minimap2'] is False
-        assert tools['bwa-mem2'] is False
-        assert tools['samtools'] is False
+        assert tools['minimap2']['available'] is False
+        assert tools['bwa-mem2']['available'] is False
+        assert tools['samtools']['available'] is False
 
 
 class TestIndexFiles:
@@ -169,12 +169,16 @@ class TestIndexBuilding:
     def test_ensure_indexes_self_tool_missing(self, mock_indexes_exist, mock_check_tools, mock_path_exists):
         """Test index building when required tool is missing."""
         mock_indexes_exist.return_value = False
-        mock_check_tools.return_value = {'minimap2': False, 'bwa-mem2': False, 'samtools': True}
+        mock_check_tools.return_value = {
+            'minimap2': {'available': False, 'version': 'not found in PATH'}, 
+            'bwa-mem2': {'available': False, 'version': 'not found in PATH'}, 
+            'samtools': {'available': True, 'version': '1.0'}
+        }
         mock_path_exists.return_value = True
         
         fasta_path = Path("/tmp/reference.fasta")
         
-        with pytest.raises(ExternalToolError, match="minimap2 not found"):
+        with pytest.raises(ExternalToolError, match="minimap2 not available"):
             ensure_indexes_self(fasta_path, Mapper.MINIMAP2)
     
     @patch('pathlib.Path.exists')
@@ -184,7 +188,11 @@ class TestIndexBuilding:
     def test_ensure_indexes_self_minimap2_build(self, mock_indexes_exist, mock_check_tools, mock_build, mock_path_exists):
         """Test minimap2 index building."""
         mock_indexes_exist.return_value = False
-        mock_check_tools.return_value = {'minimap2': True, 'bwa-mem2': True, 'samtools': True}
+        mock_check_tools.return_value = {
+            'minimap2': {'available': True, 'version': '2.30'}, 
+            'bwa-mem2': {'available': True, 'version': '2.0'}, 
+            'samtools': {'available': True, 'version': '1.0'}
+        }
         mock_path_exists.return_value = True
         
         fasta_path = Path("/tmp/reference.fasta")
@@ -200,7 +208,11 @@ class TestIndexBuilding:
     def test_ensure_indexes_self_bwa_mem2_build(self, mock_indexes_exist, mock_check_tools, mock_build, mock_path_exists):
         """Test bwa-mem2 index building."""
         mock_indexes_exist.return_value = False
-        mock_check_tools.return_value = {'minimap2': True, 'bwa-mem2': True, 'samtools': True}
+        mock_check_tools.return_value = {
+            'minimap2': {'available': True, 'version': '2.30'}, 
+            'bwa-mem2': {'available': True, 'version': '2.0'}, 
+            'samtools': {'available': True, 'version': '1.0'}
+        }
         mock_path_exists.return_value = True
         
         fasta_path = Path("/tmp/reference.fasta")
@@ -231,7 +243,11 @@ class TestMappingExecution:
     @patch('src.ssiamb.mapping.check_external_tools')
     def test_map_fastqs_tool_missing(self, mock_check_tools):
         """Test mapping when required tools are missing."""
-        mock_check_tools.return_value = {'minimap2': False, 'bwa-mem2': False, 'samtools': False}
+        mock_check_tools.return_value = {
+            'minimap2': {'available': False, 'version': 'not found in PATH'}, 
+            'bwa-mem2': {'available': False, 'version': 'not found in PATH'}, 
+            'samtools': {'available': False, 'version': 'not found in PATH'}
+        }
         
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create input files
@@ -243,7 +259,7 @@ class TestMappingExecution:
             r1_path.write_text("@read1\nACGT\n+\nIIII\n")
             r2_path.write_text("@read2\nACGT\n+\nIIII\n")
             
-            with pytest.raises(ExternalToolError, match="Required tools not found"):
+            with pytest.raises(ExternalToolError, match="Required tools not available"):
                 map_fastqs(
                     Mapper.MINIMAP2,
                     fasta_path,
@@ -257,7 +273,11 @@ class TestMappingExecution:
     @patch('src.ssiamb.mapping.check_external_tools')
     def test_map_fastqs_minimap2_success(self, mock_check_tools, mock_ensure_indexes, mock_map):
         """Test successful mapping with minimap2."""
-        mock_check_tools.return_value = {'minimap2': True, 'bwa-mem2': True, 'samtools': True}
+        mock_check_tools.return_value = {
+            'minimap2': {'available': True, 'version': '2.30'}, 
+            'bwa-mem2': {'available': True, 'version': '2.0'}, 
+            'samtools': {'available': True, 'version': '1.0'}
+        }
         
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create input files
@@ -292,7 +312,11 @@ class TestMappingExecution:
     @patch('src.ssiamb.mapping.check_external_tools')
     def test_map_fastqs_bwa_mem2_success(self, mock_check_tools, mock_ensure_indexes, mock_map):
         """Test successful mapping with bwa-mem2."""
-        mock_check_tools.return_value = {'minimap2': True, 'bwa-mem2': True, 'samtools': True}
+        mock_check_tools.return_value = {
+            'minimap2': {'available': True, 'version': '2.30'}, 
+            'bwa-mem2': {'available': True, 'version': '2.0'}, 
+            'samtools': {'available': True, 'version': '1.0'}
+        }
         
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create input files
@@ -339,7 +363,11 @@ class TestMappingExecution:
                  patch('src.ssiamb.mapping.ensure_indexes_self'), \
                  patch('src.ssiamb.mapping._map_with_minimap2') as mock_map:
                 
-                mock_check_tools.return_value = {'minimap2': True, 'bwa-mem2': True, 'samtools': True}
+                mock_check_tools.return_value = {
+                    'minimap2': {'available': True, 'version': '2.30'}, 
+                    'bwa-mem2': {'available': True, 'version': '2.0'}, 
+                    'samtools': {'available': True, 'version': '1.0'}
+                }
                 
                 # Mock the mapping function to create the expected BAM file
                 def create_bam_file(*args, **kwargs):
@@ -466,7 +494,11 @@ class TestMappingErrorHandling:
             with patch('src.ssiamb.mapping.check_external_tools') as mock_check_tools, \
                  patch('src.ssiamb.mapping.indexes_exist') as mock_indexes_exist:
                 
-                mock_check_tools.return_value = {'minimap2': True, 'bwa-mem2': True, 'samtools': True}
+                mock_check_tools.return_value = {
+                    'minimap2': {'available': True, 'version': '2.30'}, 
+                    'bwa-mem2': {'available': True, 'version': '2.0'}, 
+                    'samtools': {'available': True, 'version': '1.0'}
+                }
                 mock_indexes_exist.return_value = False
                 
                 with pytest.raises(MappingError, match="Failed to build"):

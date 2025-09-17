@@ -33,9 +33,9 @@ class TestExternalToolDetection:
         
         tools = check_external_tools()
         
-        assert tools['minimap2'] is True
-        assert tools['bwa-mem2'] is True
-        assert tools['samtools'] is True
+        assert tools['minimap2']['available'] is True
+        assert tools['bwa-mem2']['available'] is True
+        assert tools['samtools']['available'] is True
         assert len(tools) == 3
     
     @patch('src.ssiamb.mapping.shutil.which')
@@ -48,9 +48,9 @@ class TestExternalToolDetection:
         
         tools = check_external_tools()
         
-        assert tools['minimap2'] is True
-        assert tools['bwa-mem2'] is False
-        assert tools['samtools'] is True
+        assert tools['minimap2']['available'] is True
+        assert tools['bwa-mem2']['available'] is False
+        assert tools['samtools']['available'] is True
     
     @patch('src.ssiamb.mapping.shutil.which')
     def test_check_external_tools_all_missing(self, mock_which):
@@ -59,9 +59,9 @@ class TestExternalToolDetection:
         
         tools = check_external_tools()
         
-        assert tools['minimap2'] is False
-        assert tools['bwa-mem2'] is False
-        assert tools['samtools'] is False
+        assert tools['minimap2']['available'] is False
+        assert tools['bwa-mem2']['available'] is False
+        assert tools['samtools']['available'] is False
 
 
 class TestIndexFiles:

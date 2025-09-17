@@ -74,7 +74,6 @@ def run_mosdepth(
     bam_path: Path,
     output_prefix: Path,
     mapq_threshold: int = 30,
-    depth_threshold: int = 10,
     threads: int = 4
 ) -> Path:
     """
@@ -84,7 +83,6 @@ def run_mosdepth(
         bam_path: Path to input BAM file
         output_prefix: Output prefix for mosdepth files
         mapq_threshold: Minimum mapping quality (default: 30)
-        depth_threshold: Depth threshold for breadth calculation (default: 10)
         threads: Number of threads to use
         
     Returns:
@@ -104,7 +102,6 @@ def run_mosdepth(
     cmd = [
         'mosdepth',
         '--mapq', str(mapq_threshold),
-        '--thresholds', str(depth_threshold),
         '--no-per-base',  # Skip per-base output for efficiency
         '--threads', str(threads),
         str(output_prefix),
@@ -132,7 +129,7 @@ def run_mosdepth(
         raise DepthAnalysisError(error_msg)
     
     # Check that expected output file was created
-    summary_file = output_prefix.with_suffix('.mosdepth.summary.txt')
+    summary_file = Path(str(output_prefix) + '.mosdepth.summary.txt')
     if not summary_file.exists():
         raise DepthAnalysisError(f"Expected mosdepth summary file not created: {summary_file}")
     
@@ -285,7 +282,6 @@ def analyze_depth(
         bam_path=bam_path,
         output_prefix=output_prefix,
         mapq_threshold=mapq_threshold,
-        depth_threshold=depth_threshold,
         threads=threads
     )
     
