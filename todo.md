@@ -177,27 +177,27 @@ Legend:
 ---
 
 ## 16) QC Policies & Mapping Rate
-- [ ] Compute **mapping rate**: primary reads, MAPQ≥20 / primary total (QC‑fail included).
-- [ ] Warn‑only thresholds:
-  - [ ] `breadth_10x < 0.80`
-  - [ ] `callable_bases < 1e6`
-  - | [ ] ref‑mode: map rate < 0.70
-- [ ] **Acceptance:** WARNs appear; do not fail run.
+- [x] Compute **mapping rate**: primary reads, MAPQ≥20 / primary total (QC‑fail included).
+- [x] Warn‑only thresholds:
+  - [x] `breadth_10x < 0.80`
+  - [x] `callable_bases < 1e6`
+  - [x] ref‑mode: map rate < 0.70
+- [x] **Acceptance:** WARNs appear; do not fail run.
 
 ---
 
 ## 17) Provenance (optional)
-- [ ] Build per‑sample provenance objects with fields from spec §11.
-- [ ] When `--emit-provenance`, write consolidated `run_provenance.json` (array of objects).
-- [ ] **Acceptance:** Only written on flag; keys match schema.
+- [x] Build per‑sample provenance objects with fields from spec §11.
+- [x] When `--emit-provenance`, write consolidated `run_provenance.json` (array of objects).
+- [x] **Acceptance:** Only written on flag; keys match schema.
 
 ---
 
 ## 18) Ref‑mode Orchestration
-- [ ] Finalize precedence in `run_ref`: `--reference` > `--species` > `--bracken`.
-- [ ] When `--species` used, set `bracken_* = NA` and skip Bracken.
-- [ ] On Bracken failure, follow `--on-fail` (default `error`); suggest `--species`/`--reference`.
-- [ ] **Acceptance:** Dry-run clearly shows resolution path and chosen reference.
+- [x] Finalize precedence in `run_ref`: `--reference` > `--species` > `--bracken`.
+- [x] When `--species` used, set `bracken_* = NA` and skip Bracken.
+- [x] On Bracken failure, follow `--on-fail` (default `error`); suggest `--species`/`--reference`.
+- [x] **Acceptance:** Dry-run clearly shows resolution path and chosen reference.
 
 ---
 

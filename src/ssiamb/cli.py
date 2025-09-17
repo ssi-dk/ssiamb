@@ -284,7 +284,15 @@ def self(
         )
         
         # Execute plan
-        result = execute_plan(plan)
+        result, provenance_record = execute_plan(plan)
+        
+        # Handle provenance output
+        if emit_provenance and provenance_record:
+            from .provenance import write_provenance_json
+            out_dir = output_dir or Path.cwd()
+            provenance_path = out_dir / "run_provenance.json"
+            write_provenance_json([provenance_record], provenance_path)
+            console.print(f"Provenance written to {provenance_path}")
         
         if not stdout:
             console.print(f"[green]Self-mapping completed for sample {result.sample}[/green]")
@@ -525,13 +533,21 @@ def ref(
         )
         
         # Execute plan
-        result = execute_plan(plan, 
+        result, provenance_record = execute_plan(plan, 
                             species=species, 
                             bracken=bracken, 
                             ref_dir=ref_dir, 
                             on_fail=on_fail,
                             min_bracken_frac=min_bracken_frac,
                             min_bracken_reads=min_bracken_reads)
+        
+        # Handle provenance output
+        if emit_provenance and provenance_record:
+            from .provenance import write_provenance_json
+            out_dir = output_dir or Path.cwd()
+            provenance_path = out_dir / "run_provenance.json"
+            write_provenance_json([provenance_record], provenance_path)
+            console.print(f"Provenance written to {provenance_path}")
         
         if not stdout:
             console.print(f"[green]Reference-mapping completed for sample {result.sample}[/green]")

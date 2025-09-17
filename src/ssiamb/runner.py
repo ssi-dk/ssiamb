@@ -40,6 +40,11 @@ from .vcf_ops import (
 )
 from .mapping import calculate_mapping_rate
 from .reuse import has_duplicate_flags, run_markdup_for_depth, CompatibilityError
+from .qc import check_qc_metrics, log_qc_warnings, format_qc_warnings_for_summary
+from .provenance import (
+    create_provenance_record, write_provenance_json, ProvenanceRecord,
+    ProvenanceMappingStats, ProvenanceSpeciesSelection, ProvenanceCounts
+)
 from .version import __version__
 import time
 import pysam
@@ -199,13 +204,15 @@ def create_summary_row(
     reused_bam: bool = False,
     reused_vcf: bool = False,
     runtime_sec: float = 0.0,
-    denom_policy: str = "exclude_dups"
+    denom_policy: str = "exclude_dups",
+    mapping_rate: Optional[float] = None
 ) -> SummaryRow:
     """
     Create a SummaryRow with proper field calculations and formatting.
     
     Args:
         Basic parameters for SummaryRow creation
+        mapping_rate: Optional mapping rate for QC checks
         
     Returns:
         Fully populated SummaryRow object
@@ -213,6 +220,19 @@ def create_summary_row(
     # Calculate derived fields
     breadth_10x = callable_bases / genome_length if genome_length > 0 else 0.0
     ambiguous_snv_per_mb = (ambiguous_snv_count * 1_000_000) / callable_bases if callable_bases > 0 else 0.0
+    
+    # Perform QC checks and log warnings
+    from .models import Mode
+    mode_enum = Mode(mode) if mode in [m.value for m in Mode] else None
+    qc_warnings = check_qc_metrics(
+        breadth_10x=breadth_10x,
+        callable_bases=callable_bases,
+        mapping_rate=mapping_rate,
+        mode=mode_enum
+    )
+    
+    # Log QC warnings
+    log_qc_warnings(qc_warnings)
     
     return SummaryRow(
         sample=sample,
@@ -740,7 +760,8 @@ def run_self(plan: RunPlan) -> SummaryRow:
             ref_accession=ref_accession,
             reused_bam=reused_bam,
             reused_vcf=reused_vcf,
-            runtime_sec=time.time() - start_time
+            runtime_sec=time.time() - start_time,
+            mapping_rate=mapping_rate
         )
         
     except (ExternalToolError, MappingError) as e:
@@ -801,6 +822,9 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     ref_source = "unknown"
     ref_label = "unknown"
     reference_path = None
+    bracken_species = "NA"
+    bracken_frac = 0.0
+    bracken_reads = 0
     
     try:
         if plan.paths.reference:
@@ -847,6 +871,11 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                         f"No species in Bracken file {bracken_path} meet selection criteria. "
                         f"Try using --species or --reference instead."
                     )
+                
+                # Store bracken information
+                bracken_species = selection.species.name
+                bracken_frac = selection.species.fraction_total_reads
+                bracken_reads = selection.species.new_est_reads
                 
                 # Extract species name from Bracken (e.g., "Listeria monocytogenes" from potentially complex name)
                 bracken_name = selection.species.name
@@ -909,6 +938,9 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                 ambiguous_del_count=0,
                 ref_label="SKIPPED",
                 ref_accession="NA",
+                bracken_species="NA",  # No bracken data for skipped samples
+                bracken_frac=0.0,
+                bracken_reads=0,
                 reused_bam=reused_bam,
                 reused_vcf=reused_vcf,
                 runtime_sec=0.0
@@ -947,6 +979,9 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             ambiguous_del_count=0,
             ref_label=ref_label,
             ref_accession=ref_accession,
+            bracken_species=bracken_species,
+            bracken_frac=bracken_frac,
+            bracken_reads=bracken_reads,
             reused_bam=reused_bam,
             reused_vcf=reused_vcf,
             runtime_sec=0.0
@@ -1274,9 +1309,13 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             ambiguous_del_count=ambiguous_del_count,
             ref_label=ref_label,
             ref_accession=ref_accession,
+            bracken_species=bracken_species,
+            bracken_frac=bracken_frac,
+            bracken_reads=bracken_reads,
             reused_bam=reused_bam,
             reused_vcf=reused_vcf,
-            runtime_sec=time.time() - start_time
+            runtime_sec=time.time() - start_time,
+            mapping_rate=mapping_rate
         )
         
     except (ExternalToolError, MappingError) as e:
@@ -1304,9 +1343,13 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             ambiguous_del_count=0,
             ref_label=ref_label,
             ref_accession=ref_accession,
+            bracken_species=bracken_species,
+            bracken_frac=bracken_frac,
+            bracken_reads=bracken_reads,
             reused_bam=reused_bam,
             reused_vcf=reused_vcf,
-            runtime_sec=0.0
+            runtime_sec=0.0,
+            mapping_rate=0.0  # Use fallback for failed depth analysis
         )
 
 
@@ -1422,7 +1465,7 @@ def run_summarize(
         raise
 
 
-def execute_plan(plan: RunPlan, **kwargs) -> SummaryRow:
+def execute_plan(plan: RunPlan, **kwargs) -> Tuple[SummaryRow, Optional[ProvenanceRecord]]:
     """
     Execute a run plan and handle output.
     
@@ -1431,10 +1474,12 @@ def execute_plan(plan: RunPlan, **kwargs) -> SummaryRow:
         **kwargs: Mode-specific arguments
         
     Returns:
-        Summary row with results
+        Tuple of (summary row with results, provenance record if emit_provenance is True)
     """
+    from datetime import datetime
+    
     # Record start time
-    start_time = time.time()
+    start_time = datetime.now()
     
     # Get tool versions before execution
     tool_version = get_tool_versions(plan)
@@ -1447,8 +1492,11 @@ def execute_plan(plan: RunPlan, **kwargs) -> SummaryRow:
     else:
         raise ValueError(f"Unsupported mode: {plan.mode}")
     
+    # Record end time
+    end_time = datetime.now()
+    
     # Calculate runtime
-    runtime_sec = time.time() - start_time
+    runtime_sec = (end_time - start_time).total_seconds()
     
     # Update the result with runtime and tool version
     result.runtime_sec = runtime_sec
@@ -1462,4 +1510,60 @@ def execute_plan(plan: RunPlan, **kwargs) -> SummaryRow:
         write_tsv_summary(output_file, [result], plan.tsv_mode)
         logger.info(f"Results written to {output_file}")
     
-    return result
+    # Create provenance record if requested
+    provenance_record = None
+    if plan.emit_provenance:
+        # Create mapping stats
+        mapping_stats = ProvenanceMappingStats(
+            map_rate=None,  # We don't store mapping_rate in SummaryRow currently
+            breadth_10x=result.breadth_10x
+        )
+        
+        # Create counts
+        counts = ProvenanceCounts(
+            ambiguous_snv_count=result.ambiguous_snv_count,
+            ambiguous_indel_count=result.ambiguous_indel_count,
+            ambiguous_del_count=result.ambiguous_del_count,
+            callable_bases=result.callable_bases,
+            genome_length=result.genome_length
+        )
+        
+        # Extract reference path and species info
+        reference_path = None
+        reference_species = None
+        if plan.mode == Mode.REF:
+            # Try to get reference info from kwargs or plan
+            reference_path = kwargs.get('reference_path') or plan.paths.assembly
+            reference_species = kwargs.get('species')
+        
+        provenance_record = create_provenance_record(
+            sample=result.sample,
+            mode=plan.mode,
+            started_at=start_time,
+            finished_at=end_time,
+            threads=plan.threads,
+            mapper=plan.mapper.value,
+            caller=plan.caller.value,
+            dp_min=plan.thresholds.dp_min or 10,  # Use default if None
+            maf_min=plan.thresholds.maf_min or 0.1,  # Use default if None  
+            dp_cap=plan.thresholds.dp_cap or 100,  # Use default if None
+            denom_policy=result.denom_policy,  # Get from result, not plan
+            depth_tool=plan.depth_tool.value,
+            emit_vcf=plan.emit_vcf,
+            emit_bed=plan.emit_bed,
+            emit_matrix=plan.emit_matrix,
+            emit_per_contig=plan.emit_per_contig,
+            r1=plan.paths.r1,
+            r2=plan.paths.r2,
+            assembly=plan.paths.assembly,
+            reference=plan.paths.reference,
+            bam=plan.paths.bam,
+            vcf=plan.paths.vcf,
+            species=kwargs.get('species'),
+            mapping_stats=mapping_stats,
+            counts=counts,
+            reference_path=reference_path,
+            reference_species=reference_species
+        )
+    
+    return result, provenance_record

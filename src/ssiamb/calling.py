@@ -67,8 +67,8 @@ def run_bbtools_calling(
     Run BBTools variant calling pipeline.
     
     Executes:
-    1. pileup.sh ploidy=1 minmapq=X minbaseq=Y
-    2. callvariants.sh ploidy=1 clearfilters=t minallelefraction=Z minavgmapq=X minavgbasequality=Y
+    1. pileup.sh minmapq=X
+    2. callvariants.sh ploidy=1 clearfilters=t minallelefraction=Z minavgmapq=X minquality=Y
     
     Args:
         bam_path: Input BAM file
@@ -98,12 +98,8 @@ def run_bbtools_calling(
             f"in={bam_path}",
             f"ref={reference_path}",
             f"out={pileup_out}",
-            "ploidy=1",
             f"minmapq={mapq_min}",
-            f"minbaseq={baseq_min}",
             f"threads={threads}",
-            "secondary=f",  # Skip secondary alignments
-            "supplementary=f",  # Skip supplementary alignments
         ]
         
         logger.info(f"Running BBTools pileup: {' '.join(map(str, pileup_cmd))}")
@@ -136,7 +132,7 @@ def run_bbtools_calling(
             "clearfilters=t",  # Clear all filters to get raw variants
             f"minallelefraction={minallelefraction}",
             f"minavgmapq={mapq_min}",
-            f"minavgbasequality={baseq_min}",
+            f"minquality={baseq_min}",
             f"threads={threads}",
         ]
         

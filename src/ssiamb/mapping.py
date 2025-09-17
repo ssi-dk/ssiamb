@@ -64,14 +64,13 @@ def get_index_files(fasta_path: Path, mapper: Mapper) -> List[Path]:
     Raises:
         ValueError: If mapper is not supported
     """
-    base_path = fasta_path.with_suffix('')  # Remove .fasta/.fa/.fna extension
-    
     if mapper == Mapper.MINIMAP2:
         return [fasta_path.with_suffix('.mmi')]
     
     elif mapper == Mapper.BWA_MEM2:
+        # BWA-MEM2 creates index files with the original filename plus extensions
         extensions = ['.0123', '.amb', '.ann', '.pac', '.bwt.2bit.64']
-        return [base_path.with_suffix(ext) for ext in extensions]
+        return [Path(str(fasta_path) + ext) for ext in extensions]
     
     else:
         raise ValueError(f"Unsupported mapper: {mapper}")
@@ -123,7 +122,7 @@ def ensure_indexes_self(fasta_path: Path, mapper: Mapper) -> None:
     
     # Check tool availability
     tools = check_external_tools()
-    tool_name = mapper.value.replace('-', '')  # minimap2 or bwamem2
+    tool_name = mapper.value  # Use the actual tool name without modification
     if not tools.get(tool_name):
         raise ExternalToolError(f"{tool_name} not found in PATH")
     
@@ -226,7 +225,7 @@ def map_fastqs(
     
     # Check tool availability
     tools = check_external_tools()
-    tool_name = mapper.value.replace('-', '')
+    tool_name = mapper.value  # Use the actual tool name without modification
     if not tools.get(tool_name) or not tools.get('samtools'):
         missing = [t for t, avail in tools.items() if not avail and t in [tool_name, 'samtools']]
         raise ExternalToolError(f"Required tools not found: {missing}")
