@@ -336,14 +336,70 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
     temp_bam = output_dir / f"{bam_path.stem}.markdup.bam"
     
     try:
-        # Run samtools markdup
+        # First sort by queryname for markdup
+        queryname_bam = output_dir / f"{bam_path.stem}.queryname.bam"
+        
+        sort_cmd = [
+            "samtools", "sort",
+            "-n",  # Sort by queryname
+            "-o", str(queryname_bam),
+            str(bam_path)
+        ]
+        
+        logger.debug(f"Sorting by queryname: {bam_path} -> {queryname_bam}")
+        
+        sort_result = subprocess.run(
+            sort_cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Then run fixmate to add MC tags
+        fixmate_bam = output_dir / f"{bam_path.stem}.fixmate.bam"
+        
+        fixmate_cmd = [
+            "samtools", "fixmate",
+            "-m",  # Add mate score tags
+            str(queryname_bam),
+            str(fixmate_bam)
+        ]
+        
+        logger.debug(f"Running samtools fixmate: {queryname_bam} -> {fixmate_bam}")
+        
+        fixmate_result = subprocess.run(
+            fixmate_cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Sort again by coordinate for markdup
+        coord_sorted_bam = output_dir / f"{bam_path.stem}.coord_sorted.bam"
+        
+        coord_sort_cmd = [
+            "samtools", "sort",
+            "-o", str(coord_sorted_bam),
+            str(fixmate_bam)
+        ]
+        
+        logger.debug(f"Sorting by coordinate: {fixmate_bam} -> {coord_sorted_bam}")
+        
+        coord_sort_result = subprocess.run(
+            coord_sort_cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Finally run samtools markdup on the coordinate-sorted fixmate output
         cmd = [
             "samtools", "markdup",
-            str(bam_path),
+            str(coord_sorted_bam),
             str(temp_bam)
         ]
         
-        logger.info(f"Running samtools markdup: {bam_path} -> {temp_bam}")
+        logger.info(f"Running samtools markdup: {coord_sorted_bam} -> {temp_bam}")
         
         result = subprocess.run(
             cmd,
@@ -353,6 +409,11 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
         )
         
         logger.debug(f"samtools markdup completed successfully")
+        
+        # Clean up intermediate files
+        for temp_file in [queryname_bam, fixmate_bam, coord_sorted_bam]:
+            if temp_file.exists():
+                temp_file.unlink()
         
         # Index the marked BAM file
         index_cmd = ["samtools", "index", str(temp_bam)]

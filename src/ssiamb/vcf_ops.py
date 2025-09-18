@@ -114,6 +114,8 @@ def normalize_and_split(vcf_in: Path, reference: Path,
             "-f", str(reference),
             "-m", "-both",
             "--atomize",
+            "-cw",  # Check REF alleles and warn about issues (instead of error)
+            "-d", "exact",  # Remove exact duplicates (replaces deprecated -D)
             "-O", "z",  # Compress output
             "-o", str(normalized_vcf),
             str(vcf_in)
@@ -206,11 +208,25 @@ def extract_maf_from_record(record) -> Optional[float]:
             if samples:
                 sample = record.samples[samples[0]]  # Single sample
                 ad = sample.get("AD")
-                if ad is not None and len(ad) >= 2:
-                    ref_depth = int(ad[0])
-                    alt_depth = sum(int(x) for x in ad[1:])  # Sum all alt alleles
-                    total_depth = ref_depth + alt_depth
-                    if total_depth > 0:
+                dp = sample.get("DP")  # Total depth
+                
+                if ad is not None and dp is not None:
+                    # Handle different AD formats
+                    if isinstance(ad, (list, tuple)) and len(ad) >= 2:
+                        # Standard format: [ref_depth, alt_depth, ...]
+                        ref_depth = int(ad[0])
+                        alt_depth = sum(int(x) for x in ad[1:])  # Sum all alt alleles
+                        total_depth = ref_depth + alt_depth
+                    elif isinstance(ad, (int, str)):
+                        # BBTools format: AD is just alt_depth, use DP for total
+                        alt_depth = int(ad)
+                        total_depth = int(dp)
+                        ref_depth = total_depth - alt_depth
+                    else:
+                        # Skip if AD format is unexpected
+                        alt_depth = ref_depth = total_depth = 0
+                    
+                    if total_depth > 0 and ref_depth >= 0 and alt_depth >= 0:
                         ref_freq = ref_depth / total_depth
                         alt_freq = alt_depth / total_depth
                         return min(ref_freq, alt_freq)  # MAF is the minor frequency

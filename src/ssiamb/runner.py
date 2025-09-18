@@ -464,7 +464,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
     
     # Check tool availability
     tools = check_external_tools()
-    tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
+    tool_name = plan.mapper.value  # minimap2 or bwa-mem2
     mosdepth_available = check_mosdepth_available()
     caller_available = caller_tools_available(plan.caller)
     
@@ -572,6 +572,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
         
         # Step 5: Normalize VCF and count ambiguous sites
         logger.info("Normalizing VCF and counting ambiguous sites")
+        normalized_vcf_path = None  # Initialize to avoid NameError in exception handler
         try:
             # Normalize and split VCF
             normalized_vcf_path = normalize_and_split(
@@ -715,34 +716,41 @@ def run_self(plan: RunPlan) -> SummaryRow:
             )
         
         
-        # Calculate variant counts by type
-        _, grid = count_ambiguous_sites(
-            vcf_path=normalized_vcf_path,
-            dp_min=plan.thresholds.dp_min,
-            maf_min=plan.thresholds.maf_min,
-            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
-            included_contigs=included_contigs,
-            variant_classes=[VariantClass.SNV]
-        )
+        # Calculate variant counts by type (if VCF normalization succeeded)
+        ambiguous_indel_count = 0
+        ambiguous_del_count = 0
+        grid = None
         
-        # Count indels and deletions separately
-        ambiguous_indel_count, _ = count_ambiguous_sites(
-            vcf_path=normalized_vcf_path,
-            dp_min=plan.thresholds.dp_min,
-            maf_min=plan.thresholds.maf_min,
-            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
-            included_contigs=included_contigs,
-            variant_classes=[VariantClass.INS]
-        )
-        
-        ambiguous_del_count, _ = count_ambiguous_sites(
-            vcf_path=normalized_vcf_path,
-            dp_min=plan.thresholds.dp_min,
-            maf_min=plan.thresholds.maf_min,
-            dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
-            included_contigs=included_contigs,
-            variant_classes=[VariantClass.DEL]
-        )
+        if normalized_vcf_path is not None:
+            _, grid = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.SNV]
+            )
+            
+            # Count indels and deletions separately
+            ambiguous_indel_count, _ = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.INS]
+            )
+            
+            ambiguous_del_count, _ = count_ambiguous_sites(
+                vcf_path=normalized_vcf_path,
+                dp_min=plan.thresholds.dp_min,
+                maf_min=plan.thresholds.maf_min,
+                dp_cap=plan.thresholds.dp_cap if plan.thresholds.dp_cap is not None else 100,
+                included_contigs=included_contigs,
+                variant_classes=[VariantClass.DEL]
+            )
+        else:
+            logger.warning("Skipping variant type counting due to VCF normalization failure")
         
         # Detect reuse and extract ref accession
         reused_bam, reused_vcf = detect_reuse_from_plan(plan)
@@ -1000,7 +1008,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
     
     # Check tool availability
     tools = check_external_tools()
-    tool_name = plan.mapper.value.replace('-', '')  # minimap2 or bwamem2
+    tool_name = plan.mapper.value  # minimap2 or bwa-mem2
     mosdepth_available = check_mosdepth_available()
     caller_available = caller_tools_available(plan.caller)
     

@@ -348,8 +348,13 @@ class TestCountAmbiguousSites:
             f.write("##fileformat=VCFv4.2\n")
             f.write("##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">\n")
             f.write("##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency\">\n")
+            f.write("##FILTER=<ID=PASS,Description=\"All filters passed\">\n")
+            f.write("##FILTER=<ID=FAIL,Description=\"Failed quality filters\">\n")
             f.write("##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n")
             f.write("##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Allelic Depth\">\n")
+            f.write("##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">\n")
+            f.write("##contig=<ID=chr1,length=250000000>\n")
+            f.write("##contig=<ID=chr2,length=200000000>\n")
             f.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample1\n")
             
             # Write records
@@ -363,9 +368,9 @@ class TestCountAmbiguousSites:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create test VCF with some sites
             records = [
-                "chr1\t100\t.\tA\tT\t60\tPASS\tDP=50\tGT:AD\t0/1:30,20",  # MAF=0.4, depth=50
-                "chr1\t200\t.\tG\tC\t60\tPASS\tDP=20\tGT:AD\t0/1:15,5",   # MAF=0.25, depth=20
-                "chr1\t300\t.\tT\tA\t60\tPASS\tDP=5\tGT:AD\t0/1:3,2",     # MAF=0.4, depth=5
+                "chr1\t100\t.\tA\tT\t60\tPASS\tDP=50\tGT:AD:DP\t0/1:30,20:50",  # MAF=0.4, depth=50
+                "chr1\t200\t.\tG\tC\t60\tPASS\tDP=20\tGT:AD:DP\t0/1:15,5:20",   # MAF=0.25, depth=20
+                "chr1\t300\t.\tT\tA\t60\tPASS\tDP=5\tGT:AD:DP\t0/1:3,2:5",     # MAF=0.4, depth=5
             ]
             
             vcf_path = self.create_test_vcf(tmpdir, records)
@@ -385,8 +390,8 @@ class TestCountAmbiguousSites:
         """Test contig filtering in site counting."""
         with tempfile.TemporaryDirectory() as tmpdir:
             records = [
-                "chr1\t100\t.\tA\tT\t60\tPASS\tDP=50\tGT:AD\t0/1:30,20",  # Included contig
-                "chr2\t200\t.\tG\tC\t60\tPASS\tDP=50\tGT:AD\t0/1:30,20",  # Excluded contig
+                "chr1\t100\t.\tA\tT\t60\tPASS\tDP=50\tGT:AD:DP\t0/1:30,20:50",  # Included contig
+                "chr2\t200\t.\tG\tC\t60\tPASS\tDP=50\tGT:AD:DP\t0/1:30,20:50",  # Excluded contig
             ]
             
             vcf_path = self.create_test_vcf(tmpdir, records)
@@ -462,6 +467,8 @@ class TestEmitVCF:
             with open(test_vcf, 'w') as f:
                 f.write("""##fileformat=VCFv4.2
 ##contig=<ID=chr1,length=1000>
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=FAIL,Description="Failed quality filters">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
 ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
 ##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
@@ -717,6 +724,10 @@ class TestPerContigEmitter:
             
             # Create mock VCF file
             vcf_content = """##fileformat=VCFv4.2
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic Depth">
 ##contig=<ID=contig1,length=1000>
 ##contig=<ID=contig2,length=2000>
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\ttest_sample

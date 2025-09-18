@@ -284,7 +284,7 @@ class TestMarkdupFunctionality:
             result = run_markdup_for_depth(input_bam, tmpdir)
             
             assert str(result).endswith('.markdup.bam')
-            assert mock_run.call_count == 2  # markdup + index
+            assert mock_run.call_count == 5  # queryname sort + fixmate + coord sort + markdup + index
     
     @patch('shutil.which')
     def test_run_markdup_for_depth_missing_samtools(self, mock_which):

@@ -287,10 +287,11 @@ class TestMappingExecution:
                     "test_sample"
                 )
     
+    @patch('src.ssiamb.mapping.index_bam')
     @patch('src.ssiamb.mapping._map_with_minimap2')
     @patch('src.ssiamb.mapping.ensure_indexes_self')
     @patch('src.ssiamb.mapping.check_external_tools')
-    def test_map_fastqs_minimap2_success(self, mock_check_tools, mock_ensure_indexes, mock_map):
+    def test_map_fastqs_minimap2_success(self, mock_check_tools, mock_ensure_indexes, mock_map, mock_index):
         """Test successful mapping with minimap2."""
         mock_check_tools.return_value = {
             'minimap2': {'available': True, 'version': '2.30'}, 
@@ -325,11 +326,13 @@ class TestMappingExecution:
             assert result == expected_bam
             mock_ensure_indexes.assert_called_once_with(fasta_path, Mapper.MINIMAP2)
             mock_map.assert_called_once()
+            mock_index.assert_called_once_with(expected_bam)
     
+    @patch('src.ssiamb.mapping.index_bam')
     @patch('src.ssiamb.mapping._map_with_bwa_mem2')
     @patch('src.ssiamb.mapping.ensure_indexes_self')
     @patch('src.ssiamb.mapping.check_external_tools')
-    def test_map_fastqs_bwa_mem2_success(self, mock_check_tools, mock_ensure_indexes, mock_map):
+    def test_map_fastqs_bwa_mem2_success(self, mock_check_tools, mock_ensure_indexes, mock_map, mock_index):
         """Test successful mapping with bwa-mem2."""
         mock_check_tools.return_value = {
             'minimap2': {'available': True, 'version': '2.30'}, 
@@ -364,6 +367,7 @@ class TestMappingExecution:
             assert result == expected_bam
             mock_ensure_indexes.assert_called_once_with(fasta_path, Mapper.BWA_MEM2)
             mock_map.assert_called_once()
+            mock_index.assert_called_once_with(expected_bam)
     
     def test_map_fastqs_custom_output_path(self):
         """Test mapping with custom output path."""
@@ -380,7 +384,8 @@ class TestMappingExecution:
             
             with patch('src.ssiamb.mapping.check_external_tools') as mock_check_tools, \
                  patch('src.ssiamb.mapping.ensure_indexes_self'), \
-                 patch('src.ssiamb.mapping._map_with_minimap2') as mock_map:
+                 patch('src.ssiamb.mapping._map_with_minimap2') as mock_map, \
+                 patch('src.ssiamb.mapping.index_bam') as mock_index:
                 
                 mock_check_tools.return_value = {
                     'minimap2': {'available': True, 'version': '2.30'}, 
@@ -403,6 +408,7 @@ class TestMappingExecution:
                 )
                 
                 assert result == custom_output
+                mock_index.assert_called_once_with(custom_output)
 
 
 class TestMappingRate:

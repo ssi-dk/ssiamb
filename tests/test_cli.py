@@ -53,7 +53,10 @@ class TestMainCallback:
         result = runner.invoke(app, ["--version"])
         
         assert result.exit_code == 0
-        assert __version__ in result.stdout
+        # Strip ANSI color codes for comparison
+        import re
+        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
+        assert __version__ in clean_output
     
     def test_verbose_and_quiet_conflict(self):
         """Test that verbose and quiet options conflict."""

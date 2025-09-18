@@ -1,7 +1,7 @@
 
 # ssiamb — v1 Project TODO Checklist
 
-Use this as a living, end-to-end checklist from empty repo to a tagged `v0.1` release, Bioconda, BioContainer, and Galaxy ToolShed publication.
+Use this as a living, end-to-end checklist from empty repo to a tagged `v1.0` release, Bioconda, BioContainer, and Galaxy ToolShed publication.
 
 Legend:  
 - [ ] = not started • [~] = in progress • [x] = done
@@ -288,14 +288,13 @@ Legend:
   - [ ] Quick examples for `self`, `ref`, `summarize`
   - [ ] Output overview & flags
   - [ ] Error codes table
-- [ ] Add `spec.md` and `prompt_plan.md` to repo root.
 - [ ] **Acceptance:** Docs reflect current CLI/behavior.
 
 ---
 
 ## 29) Release
-- [ ] Bump version to **v0.1** in `version.py` and `pyproject.toml`.
-- [ ] Tag `v0.1` → triggers GH Actions → publish to PyPI.
+- [ ] Bump version to **v1.0** in `version.py` and `pyproject.toml`.
+- [ ] Tag `v1.0` → triggers GH Actions → publish to PyPI.
 - [ ] Open Bioconda PR; verify BioContainer build.
 - [ ] Publish Galaxy wrapper to ToolShed under owner **pmat**, category **Sequence Analysis**.
 - [ ] Announce availability internally; note `$SSIAMB_REF_DIR` setup for Galaxy.
@@ -307,13 +306,4 @@ Legend:
 - [ ] `ambiguous_summary.tsv` populated correctly; optional outputs emitted only on flags.
 - [ ] `--dry-run` & `--stdout` behave as specified.
 - [ ] Exit codes and error messages match spec.
-- [ ] v0.1 published to **PyPI**, Bioconda PR opened, Galaxy ToolShed wrapper available.
-
----
-
-## Nice‑to‑Have (Post‑v1)
-- [ ] Add structured JSON logs (`--json-log`).
-- [ ] Parallel by samples (`--jobs N`).
-- [ ] Plasmid‑aware summaries and alias file on disk.
-- [ ] Optional `--fastp` pre‑processing.
-- [ ] Masks (`--mask-bed`) and stricter caller‑matched denominators.
+- [ ] v1.0 published to **PyPI**, Bioconda PR opened, Galaxy ToolShed wrapper available.

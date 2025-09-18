@@ -131,6 +131,41 @@ def indexes_exist(fasta_path: Path, mapper: Mapper) -> bool:
     return all(idx_file.exists() for idx_file in index_files)
 
 
+def index_bam(bam_path: Path) -> None:
+    """
+    Index a BAM file using samtools.
+    
+    Args:
+        bam_path: Path to BAM file to index
+        
+    Raises:
+        MappingError: If indexing fails
+    """
+    if not bam_path.exists():
+        raise MappingError(f"BAM file not found: {bam_path}")
+    
+    index_path = bam_path.with_suffix('.bam.bai')
+    
+    logger.debug(f"Indexing BAM file: {bam_path}")
+    
+    try:
+        cmd = ["samtools", "index", str(bam_path)]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        if not index_path.exists():
+            raise MappingError(f"BAM index was not created: {index_path}")
+            
+        logger.debug(f"Created BAM index: {index_path}")
+        
+    except subprocess.CalledProcessError as e:
+        raise MappingError(f"Failed to index BAM {bam_path}: {e.stderr}")
+
+
 def ensure_indexes_self(fasta_path: Path, mapper: Mapper) -> None:
     """
     Ensure index files exist for self-mode mapping, building them if missing.
@@ -294,6 +329,9 @@ def map_fastqs(
     
     if not output_path.exists():
         raise MappingError(f"Output BAM was not created: {output_path}")
+    
+    # Index the BAM file
+    index_bam(output_path)
     
     logger.info(f"Created sorted BAM: {output_path}")
     return output_path
