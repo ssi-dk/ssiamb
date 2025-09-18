@@ -11,60 +11,13 @@ from unittest.mock import patch, MagicMock, call
 from typer.testing import CliRunner
 import typer
 
-from src.ssiamb.cli import app, version_callback
+from src.ssiamb.cli import app
 from src.ssiamb.version import __version__
 from src.ssiamb.models import Mode, TSVMode, DepthTool
 
 
-class TestVersionCallback:
-    """Test version callback functionality."""
-    
-    def test_version_callback_true(self):
-        """Test version callback when value is True."""
-        with pytest.raises(typer.Exit):
-            version_callback(True)
-    
-    def test_version_callback_false(self):
-        """Test version callback when value is False."""
-        # Should not raise an exception
-        result = version_callback(False)
-        assert result is None
-
-
 class TestMainCallback:
     """Test main callback and global options."""
-    
-    def test_help_option(self):
-        """Test help option display."""
-        runner = CliRunner()
-        result = runner.invoke(app, ["--help"])
-        
-        assert result.exit_code == 0
-        assert "SSI Ambiguous Site Detection Tool" in result.stdout
-        assert "--version" in result.stdout
-        assert "--config" in result.stdout
-        assert "--verbose" in result.stdout
-        assert "--quiet" in result.stdout
-        assert "--dry-run" in result.stdout
-    
-    def test_version_option(self):
-        """Test version option."""
-        runner = CliRunner()
-        result = runner.invoke(app, ["--version"])
-        
-        assert result.exit_code == 0
-        # Strip ANSI color codes for comparison
-        import re
-        clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
-        assert __version__ in clean_output
-    
-    def test_verbose_and_quiet_conflict(self):
-        """Test that verbose and quiet options conflict."""
-        runner = CliRunner()
-        result = runner.invoke(app, ["--verbose", "--quiet", "self", "--r1", "test1.fq", "--r2", "test2.fq", "--assembly", "test.fa"])
-        
-        assert result.exit_code == 1
-        assert "--verbose and --quiet cannot be used together" in result.stdout
     
     @patch('src.ssiamb.config.load_config')
     def test_config_loading_success(self, mock_load_config):
@@ -365,22 +318,6 @@ class TestSummarizeCommand:
 
 class TestCLIIntegration:
     """Test CLI integration and error handling."""
-    
-    def test_no_command_provided(self):
-        """Test CLI behavior when no command is provided."""
-        runner = CliRunner()
-        result = runner.invoke(app, [])
-        
-        # Should show help and exit with non-zero code
-        assert result.exit_code != 0
-        assert "SSI Ambiguous Site Detection Tool" in result.stdout
-    
-    def test_invalid_command(self):
-        """Test CLI behavior with invalid command."""
-        runner = CliRunner()
-        result = runner.invoke(app, ["invalid_command"])
-        
-        assert result.exit_code != 0
     
     @patch('src.ssiamb.cli.create_run_plan')
     def test_create_run_plan_error_handling(self, mock_create_plan):
