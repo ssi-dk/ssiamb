@@ -28,54 +28,39 @@ from src.ssiamb.models import SummaryRow
 class TestSampleNameValidation:
     """Test sample name validation functionality."""
     
-    def test_validate_sample_name_valid(self):
+    @pytest.mark.parametrize("valid_name", [
+        "sample1",
+        "test_sample", 
+        "sample-123",
+        "S123",
+        "abc_def_123",
+        "a",  # Minimum valid length
+        "a" * 64,  # Maximum valid length  
+        "test._-123",  # Special characters that should be allowed
+    ])
+    def test_validate_sample_name_valid(self, valid_name):
         """Test validation of valid sample names."""
-        valid_names = [
-            "sample1",
-            "test_sample",
-            "sample-123",
-            "S123",
-            "abc_def_123",
-        ]
-        
-        for name in valid_names:
-            result = validate_sample_name(name)
-            assert result == name
+        result = validate_sample_name(valid_name)
+        assert result == valid_name
     
-    def test_validate_sample_name_invalid(self):
+    @pytest.mark.parametrize("invalid_name,reason", [
+        ("", "Empty"),
+        ("sample with spaces", "Spaces"),
+        ("sample/slash", "Slash"),
+        ("sample\\backslash", "Backslash"),
+        ("sample:colon", "Colon"),
+        ("sample*asterisk", "Asterisk"),
+        ("sample?question", "Question mark"),
+        ("sample\"quote", "Quote"),
+        ("sample<less", "Less than"),
+        ("sample>greater", "Greater than"),
+        ("sample|pipe", "Pipe"),
+        ("a" * 65, "Too long (65 chars)"),
+    ])
+    def test_validate_sample_name_invalid(self, invalid_name, reason):
         """Test validation of invalid sample names."""
-        invalid_names = [
-            "",  # Empty
-            "sample with spaces",  # Spaces
-            "sample/slash",  # Slash
-            "sample\\backslash",  # Backslash
-            "sample:colon",  # Colon
-            "sample*asterisk",  # Asterisk
-            "sample?question",  # Question mark
-            "sample\"quote",  # Quote
-            "sample<less",  # Less than
-            "sample>greater",  # Greater than
-            "sample|pipe",  # Pipe
-            "a" * 65,  # Too long (65 chars)
-        ]
-        
-        for name in invalid_names:
-            with pytest.raises(SampleNameError):
-                validate_sample_name(name)
-    
-    def test_validate_sample_name_edge_cases(self):
-        """Test edge cases in sample name validation."""
-        # Minimum valid length
-        min_name = "a"
-        assert validate_sample_name(min_name) == min_name
-        
-        # Maximum valid length
-        max_name = "a" * 64
-        assert validate_sample_name(max_name) == max_name
-        
-        # Special characters that should be allowed
-        special_chars_name = "test._-123"
-        assert validate_sample_name(special_chars_name) == special_chars_name
+        with pytest.raises(SampleNameError):
+            validate_sample_name(invalid_name)
 
 
 class TestSampleNameInference:

@@ -23,47 +23,6 @@ from src.ssiamb.mapping import (
 from src.ssiamb.models import Mapper
 
 
-class TestExternalToolDetection:
-    """Test external tool availability detection."""
-    
-    @patch('src.ssiamb.mapping.shutil.which')
-    def test_check_external_tools_all_available(self, mock_which):
-        """Test tool detection when all tools are available."""
-        mock_which.return_value = "/usr/bin/tool"  # Tool found
-        
-        tools = check_external_tools()
-        
-        assert tools['minimap2']['available'] is True
-        assert tools['bwa-mem2']['available'] is True
-        assert tools['samtools']['available'] is True
-        assert len(tools) == 3
-    
-    @patch('src.ssiamb.mapping.shutil.which')
-    def test_check_external_tools_some_missing(self, mock_which):
-        """Test tool detection when some tools are missing."""
-        def mock_which_side_effect(tool):
-            return "/usr/bin/tool" if tool in ['minimap2', 'samtools'] else None
-        
-        mock_which.side_effect = mock_which_side_effect
-        
-        tools = check_external_tools()
-        
-        assert tools['minimap2']['available'] is True
-        assert tools['bwa-mem2']['available'] is False
-        assert tools['samtools']['available'] is True
-    
-    @patch('src.ssiamb.mapping.shutil.which')
-    def test_check_external_tools_all_missing(self, mock_which):
-        """Test tool detection when all tools are missing."""
-        mock_which.return_value = None  # No tools found
-        
-        tools = check_external_tools()
-        
-        assert tools['minimap2']['available'] is False
-        assert tools['bwa-mem2']['available'] is False
-        assert tools['samtools']['available'] is False
-
-
 class TestIndexFiles:
     """Test index file path generation and detection."""
     
@@ -140,24 +99,6 @@ class TestIndexFiles:
 class TestMappingRate:
     """Test mapping rate calculation functionality."""
     
-    @patch('src.ssiamb.mapping.shutil.which')
-    def test_calculate_mapping_rate_samtools_missing(self, mock_which):
-        """Test mapping rate calculation when samtools is missing."""
-        mock_which.return_value = None
-        
-        bam_path = Path("/tmp/test.bam")
-        
-        with pytest.raises(ExternalToolError, match="samtools not found"):
-            calculate_mapping_rate(bam_path)
-    
-    def test_calculate_mapping_rate_bam_missing(self):
-        """Test mapping rate calculation when BAM file doesn't exist."""
-        bam_path = Path("/non/existent/file.bam")
-        
-        with patch('src.ssiamb.mapping.shutil.which', return_value="/usr/bin/samtools"):
-            with pytest.raises(MappingError, match="BAM file not found"):
-                calculate_mapping_rate(bam_path)
-    
     @patch('src.ssiamb.mapping.subprocess.run')
     @patch('src.ssiamb.mapping.shutil.which')
     def test_calculate_mapping_rate_success(self, mock_which, mock_run):
@@ -216,22 +157,6 @@ SN	reads unmapped:	0
             
             with pytest.raises(MappingError, match="samtools stats failed"):
                 calculate_mapping_rate(bam_path)
-
-
-class TestMappingErrorHandling:
-    """Test error handling in mapping functions."""
-    
-    def test_mapping_error_creation(self):
-        """Test MappingError exception creation."""
-        error = MappingError("Test mapping error")
-        assert str(error) == "Test mapping error"
-        assert isinstance(error, Exception)
-    
-    def test_external_tool_error_creation(self):
-        """Test ExternalToolError exception creation."""
-        error = ExternalToolError("Tool not found")
-        assert str(error) == "Tool not found"
-        assert isinstance(error, Exception)
 
 
 class TestInputValidation:
