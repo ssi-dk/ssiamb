@@ -73,19 +73,38 @@ conda install -c bioconda ssiamb
 ## Quick Start
 
 ```bash
+# Check what would be done (dry run)
+ssiamb --dry-run self --r1 sample_R1.fastq.gz --r2 sample_R2.fastq.gz --assembly sample.fna
+
 # Self-mapping mode: analyze reads against sample's own assembly
 ssiamb self --r1 sample_R1.fastq.gz --r2 sample_R2.fastq.gz --assembly sample.fna
 
 # Reference-mapped mode: analyze against species reference
 ssiamb ref --r1 sample_R1.fastq.gz --r2 sample_R2.fastq.gz --species "Escherichia coli"
 
-# With custom thresholds
+# Summarize existing VCF and BAM files
+ssiamb summarize --vcf sample.vcf.gz --bam sample.bam
+
+# With custom thresholds and optional outputs
 ssiamb self --r1 reads_R1.fastq.gz --r2 reads_R2.fastq.gz --assembly assembly.fna \
-  --dp-min 15 --maf-min 0.05
+  --dp-min 15 --maf-min 0.05 --emit-vcf --emit-bed
 
 # Output to stdout (no files written)
 ssiamb self --r1 reads_R1.fastq.gz --r2 reads_R2.fastq.gz --assembly assembly.fna --stdout
 ```
+
+## Error Codes
+
+`ssiamb` follows a structured exit code system for programmatic handling:
+
+- **0**: Success
+- **1**: CLI/input errors (missing files, invalid sample names, bad arguments)
+- **2**: Reference mode selection errors (species not found, Bracken failures)
+- **3**: Reuse compatibility errors (VCF/BAM mismatch with reference)
+- **4**: External tool failures (missing tools, tool execution errors)
+- **5**: QC failures (only when `--qc-action fail` is enabled)
+
+Errors include helpful suggestions and available options when applicable.
 
 ## Output
 

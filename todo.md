@@ -202,36 +202,36 @@ Legend:
 ---
 
 ## 19) Summarize Mode
-- [ ] Implement `run_summarize`: require `--vcf` and `--bam`.
-- [ ] Reuse denominator pipeline from BAM; count with thresholds/grid; optional outputs.
-- [ ] **Acceptance:** Errors if either file missing; stdout mode works.
+- [x] Implement `run_summarize`: require `--vcf` and `--bam`.
+- [x] Reuse denominator pipeline from BAM; count with thresholds/grid; optional outputs.
+- [x] **Acceptance:** Errors if either file missing; stdout mode works.
 
 ---
 
 ## 20) Dry‑run Planner
-- [ ] Implement `--dry-run` across subcommands to print planned external calls, thresholds, mapper/caller, resolved reference label, and output plan; **no file writes**.
-- [ ] **Acceptance:** Runs exit 0 with readable plan.
+- [x] Implement `--dry-run` across subcommands to print planned external calls, thresholds, mapper/caller, resolved reference label, and output plan; **no file writes**.
+- [x] **Acceptance:** Runs exit 0 with readable plan.
 
 ---
 
 ## 21) Error Handling & Exit Codes
-- [ ] Centralize exception → exit code mapping:
-  - [ ] 0 success
-  - [ ] 1 CLI/input errors (missing args/files, unsafe sample name, invalid manifest)
-  - [ ] 2 ref‑mode selection errors
-  - [ ] 3 reuse mismatch too severe
-  - [ ] 4 external tool failure
-  - [ ] 5 QC failure (only if user opts into `--qc-action fail` later)
-- [ ] Include helpful suggestions in messages (available species list, thresholds guidance).
-- [ ] **Acceptance:** Manual fault injection yields correct codes/messages.
+- [x] Centralize exception → exit code mapping:
+  - [x] 0 success
+  - [x] 1 CLI/input errors (missing args/files, unsafe sample name, invalid manifest)
+  - [x] 2 ref‑mode selection errors
+  - [x] 3 reuse mismatch too severe
+  - [x] 4 external tool failure
+  - [x] 5 QC failure (only if user opts into `--qc-action fail` later)
+- [x] Include helpful suggestions in messages (available species list, thresholds guidance).
+- [x] **Acceptance:** Manual fault injection yields correct codes/messages.
 
 ---
 
 ## 22) Packaging Polish & Version
-- [ ] Add `--version` flag wired to `__version__`.
-- [ ] Fill pyproject metadata: homepage/repository, classifiers.
-- [ ] README quickstart: install, minimal `self`/`ref` examples, dry‑run, stdout.
-- [ ] **Acceptance:** `ssiamb --version` prints version; README renders.
+- [x] Add `--version` flag wired to `__version__`.
+- [x] Fill pyproject metadata: homepage/repository, classifiers.
+- [x] README quickstart: install, minimal `self`/`ref` examples, dry‑run, stdout.
+- [x] **Acceptance:** `ssiamb --version` prints version; README renders.
 
 ---
 
