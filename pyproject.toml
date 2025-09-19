@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ssiamb"
-version = "0.0.5"
+version = "0.0.6"
 description = "SSI Ambiguous Site Detection Tool"
 readme = "README.md"
 license = "MIT"
@@ -70,7 +70,7 @@ dependencies = [
 
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
-test-cov = "pytest --cov=ssiamb --cov-report=term-missing {args:tests}"
+test-cov = "pytest --cov=src/ssiamb --cov-report=term-missing {args:tests}"
 cov = "test-cov"
 
 [tool.hatch.envs.lint]
@@ -118,3 +118,30 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
