@@ -25,10 +25,20 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+
 # Configure console for better test compatibility
-console = Console(
-    force_terminal=not ("pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST"))
-)
+def _is_test_environment():
+    """Detect if we're running in a test environment."""
+    return (
+        "pytest" in sys.modules
+        or os.getenv("PYTEST_CURRENT_TEST") is not None
+        or os.getenv("CI") == "true"
+        or os.getenv("GITHUB_ACTIONS") == "true"
+        or "unittest" in sys.modules
+    )
+
+
+console = Console(force_terminal=not _is_test_environment())
 
 
 def version_callback(value: bool) -> None:
