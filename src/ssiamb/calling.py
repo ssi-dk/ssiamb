@@ -9,7 +9,7 @@ import logging
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 
 from .models import Caller
@@ -34,7 +34,7 @@ class VariantCallResult:
     runtime_seconds: Optional[float] = None
 
 
-def check_caller_tools_detailed(caller: Caller) -> Dict[str, Dict[str, str]]:
+def check_caller_tools_detailed(caller: Caller) -> Dict[str, Dict[str, Any]]:
     """
     Check availability and versions of required tools for the specified caller.
 

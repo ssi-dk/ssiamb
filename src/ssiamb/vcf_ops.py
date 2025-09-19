@@ -10,7 +10,7 @@ import subprocess
 import shutil
 import warnings
 from pathlib import Path
-from typing import Optional, List, Tuple, Iterator, Set
+from typing import Optional, List, Tuple, Iterator, Set, Any
 from dataclasses import dataclass
 from enum import Enum
 
@@ -191,7 +191,7 @@ def classify_variant(ref: str, alt: str) -> VariantClass:
         return VariantClass.UNKNOWN
 
 
-def extract_maf_from_record(record) -> Optional[float]:
+def extract_maf_from_record(record: Any) -> Optional[float]:
     """
     Extract minor allele frequency from VCF record using precedence: AD → DP4 → AF.
 
@@ -249,7 +249,7 @@ def extract_maf_from_record(record) -> Optional[float]:
             if isinstance(af, (list, tuple)):
                 # Multi-allelic: compute site-level MAF
                 if len(af) > 0:
-                    max_af = max(af)
+                    max_af = float(max(af))
                     ref_freq = 1.0 - sum(af)
                     return min(ref_freq, max_af)
             else:
@@ -290,13 +290,15 @@ def parse_vcf_sites(
                 ):
                     continue
 
-                # Skip if no ALT alleles
-                if not record.alts:
+                # Skip if no ALT alleles or no REF
+                if not record.alts or not record.ref:
                     continue
 
                 # For multi-allelic sites (after normalization should be rare),
                 # process each ALT allele separately
                 for alt_allele in record.alts:
+                    # At this point record.ref is guaranteed to be non-None
+                    assert record.ref is not None
                     variant_class = classify_variant(record.ref, alt_allele)
 
                     # Skip unknown/symbolic variants
@@ -322,7 +324,7 @@ def parse_vcf_sites(
 
                     # Get original filter
                     orig_filter = (
-                        ";".join(record.filter.keys())
+                        ";".join(str(f) for f in record.filter.keys())
                         if record.filter.keys()
                         else "PASS"
                     )
@@ -659,11 +661,12 @@ def emit_vcf(
                             new_record.filter.add("PASS")
 
                             # Copy FORMAT fields
-                            for sample in record.samples:
+                            for sample_id in record.samples:
+                                sample_name = str(sample_id)
                                 for key in record.format:
-                                    new_record.samples[sample][key] = record.samples[
-                                        sample
-                                    ][key]
+                                    new_record.samples[sample_name][key] = (
+                                        record.samples[sample_id][key]
+                                    )
 
                             output_vcf.write(new_record)
                             records_written += 1
@@ -821,8 +824,8 @@ def emit_bed(
             )
 
             # Write records
-            for record in bed_records:
-                f.write("\t".join(record) + "\n")
+            for bed_record in bed_records:
+                f.write("\t".join(bed_record) + "\n")
 
         # Compress with bgzip
         bgzip_cmd = ["bgzip", "-c", str(temp_bed)]

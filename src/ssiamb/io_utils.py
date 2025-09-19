@@ -11,7 +11,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Iterator
 import fcntl
 from contextlib import contextmanager
 
@@ -138,7 +138,7 @@ def infer_sample_name(
 
 
 @contextmanager
-def file_lock(file_path: Path):
+def file_lock(file_path: Path) -> Iterator[None]:
     """
     Context manager for file locking (best-effort cross-platform).
 

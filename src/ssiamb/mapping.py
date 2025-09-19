@@ -10,7 +10,7 @@ This module provides functionality for:
 import subprocess
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import shutil
 
 from .models import Mapper
@@ -31,7 +31,7 @@ class ExternalToolError(Exception):
     pass
 
 
-def check_external_tools() -> Dict[str, Dict[str, str]]:
+def check_external_tools() -> Dict[str, Dict[str, Any]]:
     """
     Check availability and versions of external mapping tools.
 

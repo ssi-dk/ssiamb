@@ -6,7 +6,7 @@ of self, ref, and summarize modes by calling appropriate modules.
 """
 
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Any
 import logging
 import time
 import subprocess
@@ -49,6 +49,7 @@ from .vcf_ops import (
     count_ambiguous_sites,
     VCFOperationError,
     VariantClass,
+    AmbigGrid,
     emit_vcf,
     emit_bed,
     emit_matrix,
@@ -311,7 +312,7 @@ def create_run_plan(
     emit_per_contig: bool = False,
     emit_multiqc: bool = False,
     emit_provenance: bool = False,
-    **kwargs,
+    **kwargs: Any,
 ) -> RunPlan:
     """
     Create a validated execution plan from CLI arguments.
@@ -795,10 +796,10 @@ def run_self(plan: RunPlan) -> SummaryRow:
         # Calculate variant counts by type (if VCF normalization succeeded)
         ambiguous_indel_count = 0
         ambiguous_del_count = 0
-        grid = None
+        ref_grid: Optional[AmbigGrid] = None
 
         if normalized_vcf_path is not None:
-            _, grid = count_ambiguous_sites(
+            _, ref_grid = count_ambiguous_sites(
                 vcf_path=normalized_vcf_path,
                 dp_min=plan.thresholds.dp_min,
                 maf_min=plan.thresholds.maf_min,
@@ -902,7 +903,15 @@ def run_self(plan: RunPlan) -> SummaryRow:
         )
 
 
-def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
+def run_ref(
+    plan: RunPlan,
+    species: Optional[str] = None,
+    bracken: Optional[Path] = None,
+    ref_dir: Optional[Path] = None,
+    on_fail: str = "error",
+    min_bracken_frac: float = 0.70,
+    min_bracken_reads: int = 100000,
+) -> SummaryRow:
     """
     Execute reference-mapping mode.
 
@@ -940,11 +949,10 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             ref_label = plan.paths.reference.name
             reference_path = plan.paths.reference
 
-        elif kwargs.get("species"):
+        elif species:
             # Species lookup in admin directory
             ref_source = "species"
-            species = kwargs["species"]
-            ref_dir = resolve_reference_directory(kwargs.get("ref_dir"))
+            ref_dir = resolve_reference_directory(ref_dir)
 
             # Resolve species to FASTA file
             reference_path = resolve_species_to_fasta(ref_dir, species)
@@ -957,7 +965,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             else:
                 ref_label = species
 
-        elif kwargs.get("bracken"):
+        elif bracken:
             # Bracken-based species selection
             from .bracken import (
                 select_species_from_file,
@@ -966,11 +974,11 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             )
 
             ref_source = "bracken"
-            bracken_path = Path(kwargs["bracken"])
+            bracken_path = Path(bracken)
 
             # Get thresholds from configuration or defaults
-            min_frac = kwargs.get("min_bracken_frac", 0.70)
-            min_reads = kwargs.get("min_bracken_reads", 100000)
+            min_frac = min_bracken_frac
+            min_reads = min_bracken_reads
             thresholds = BrackenThresholds(min_frac=min_frac, min_reads=min_reads)
 
             try:
@@ -999,7 +1007,7 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
                     species_for_resolution = bracken_name
 
                 # Resolve species to reference file
-                ref_dir = resolve_reference_directory(kwargs.get("ref_dir"))
+                ref_dir = resolve_reference_directory(ref_dir)
                 reference_path = resolve_species_to_fasta(
                     ref_dir, species_for_resolution
                 )
@@ -1026,16 +1034,14 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
             )
 
     except ReferenceResolutionError as e:
-        on_fail_action = kwargs.get("on_fail", "error")
-
-        if on_fail_action == "error":
+        if on_fail == "error":
             raise
-        elif on_fail_action == "warn":
+        elif on_fail == "warn":
             logger.warning(f"Reference resolution failed: {e}")
             # Continue with placeholder data
             ref_source = "failed"
             ref_label = "resolution_failed"
-        elif on_fail_action == "skip":
+        elif on_fail == "skip":
             logger.info(f"Skipping due to reference resolution failure: {e}")
             # Detect reuse (though unlikely in skip case)
             reused_bam, reused_vcf = detect_reuse_from_plan(plan)
@@ -1800,7 +1806,13 @@ def run_summarize(
 
 
 def execute_plan(
-    plan: RunPlan, **kwargs
+    plan: RunPlan,
+    species: Optional[str] = None,
+    bracken: Optional[Path] = None,
+    ref_dir: Optional[Path] = None,
+    on_fail: str = "error",
+    min_bracken_frac: float = 0.1,
+    min_bracken_reads: int = 10,
 ) -> Tuple[SummaryRow, Optional[ProvenanceRecord]]:
     """
     Execute a run plan and handle output.
@@ -1820,7 +1832,15 @@ def execute_plan(
         if plan.mode == Mode.SELF:
             result = run_self(plan)
         elif plan.mode == Mode.REF:
-            result = run_ref(plan, **kwargs)
+            result = run_ref(
+                plan,
+                species=species,
+                bracken=bracken,
+                ref_dir=ref_dir,
+                on_fail=on_fail,
+                min_bracken_frac=min_bracken_frac,
+                min_bracken_reads=min_bracken_reads,
+            )
         else:
             raise ValueError(f"Unsupported mode: {plan.mode}")
 
@@ -1838,7 +1858,15 @@ def execute_plan(
     if plan.mode == Mode.SELF:
         result = run_self(plan)
     elif plan.mode == Mode.REF:
-        result = run_ref(plan, **kwargs)
+        result = run_ref(
+            plan,
+            species=species,
+            bracken=bracken,
+            ref_dir=ref_dir,
+            on_fail=on_fail,
+            min_bracken_frac=min_bracken_frac,
+            min_bracken_reads=min_bracken_reads,
+        )
     else:
         raise ValueError(f"Unsupported mode: {plan.mode}")
 
@@ -1884,9 +1912,9 @@ def execute_plan(
         reference_path = None
         reference_species = None
         if plan.mode == Mode.REF:
-            # Try to get reference info from kwargs or plan
-            reference_path = kwargs.get("reference_path") or plan.paths.assembly
-            reference_species = kwargs.get("species")
+            # Try to get reference info from args or plan
+            reference_path = plan.paths.assembly
+            reference_species = species
 
         provenance_record = create_provenance_record(
             sample=result.sample,
@@ -1911,7 +1939,7 @@ def execute_plan(
             reference=plan.paths.reference,
             bam=plan.paths.bam,
             vcf=plan.paths.vcf,
-            species=kwargs.get("species"),
+            species=species,
             mapping_stats=mapping_stats,
             counts=counts,
             reference_path=reference_path,

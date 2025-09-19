@@ -122,7 +122,7 @@ def get_vcf_contigs(vcf_path: Path) -> Dict[str, int]:
             for contig_name, record in vcf.header.contigs.items():
                 # Access length attribute directly
                 if hasattr(record, "length") and record.length is not None:
-                    contigs[contig_name] = int(record.length)
+                    contigs[str(contig_name)] = int(record.length)
 
         logger.debug(f"Found {len(contigs)} contigs in VCF header: {vcf_path}")
         return contigs

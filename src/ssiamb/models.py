@@ -108,7 +108,7 @@ class Thresholds:
 
     @classmethod
     def from_config(
-        cls, config: Optional["SsiambConfig"] = None, **overrides
+        cls, config: Optional["SsiambConfig"] = None, **overrides: Any
     ) -> "Thresholds":
         """
         Create Thresholds from configuration with optional overrides.

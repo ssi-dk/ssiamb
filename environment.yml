@@ -1,4 +1,4 @@
-name: /Users/B246654/vscode_storage/ssi-dk/ssiamb/env
+name: ssiamb
 channels:
   - bioconda
   - conda-forge
@@ -46,40 +46,54 @@ dependencies:
   - wheel=0.45.1=pyhd8ed1ab_1
   - zstd=1.5.7=h8210216_2
   - pip:
+      # Core runtime dependencies
       - biopython==1.85
-      - black==25.1.0
-      - build==1.3.0
+      - numpy==2.3.3
+      - pandas==2.3.2
+      - pysam==0.23.3
+      - pyyaml==6.0.2
+      - typer==0.17.4
+      - rich==14.1.0
       - click==8.2.1
-      - coverage==7.10.6
-      - flake8==7.3.0
-      - hatchling==1.27.0
-      - iniconfig==2.1.0
-      - markdown-it-py==4.0.0
-      - mccabe==0.7.0
-      - mdurl==0.1.2
+      - shellingham==1.5.4
+      
+      # Development and build tools
+      - black==25.1.0
+      - ruff==0.13.1
       - mypy==1.18.1
       - mypy-extensions==1.1.0
-      - numpy==2.3.3
+      - types-PyYAML
+      - pandas-stubs
+      
+      # Testing tools
+      - pytest==8.4.2
+      - pytest-cov==7.0.0
+      - coverage==7.10.6
+      - iniconfig==2.1.0
+      - pluggy==1.6.0
+      
+      # Packaging and build tools
+      - build==1.3.0
+      - hatchling==1.27.0
       - packaging==25.0
-      - pandas==2.3.2
+      - pyproject-hooks==1.2.0
+      - trove-classifiers==2025.9.11.17
+      
+      # Additional utilities and dependencies
+      - markdown-it-py==4.0.0
+      - mdurl==0.1.2
       - pathspec==0.12.1
       - platformdirs==4.4.0
-      - pluggy==1.6.0
       - pycodestyle==2.14.0
       - pyflakes==3.4.0
       - pygments==2.19.2
-      - pyproject-hooks==1.2.0
-      - pysam==0.23.3
-      - pytest==8.4.2
-      - pytest-cov==7.0.0
       - python-dateutil==2.9.0.post0
       - pytz==2025.2
-      - pyyaml==6.0.2
-      - rich==14.1.0
-      - shellingham==1.5.4
       - six==1.17.0
-      - trove-classifiers==2025.9.11.17
-      - typer==0.17.4
       - typing-extensions==4.15.0
       - tzdata==2025.2
+      
+      # Legacy tools (can be removed if not needed)
+      - flake8==7.3.0
+      - mccabe==0.7.0
 prefix: /Users/B246654/vscode_storage/ssi-dk/ssiamb/env

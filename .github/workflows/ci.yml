@@ -29,7 +29,7 @@ jobs:
         pip install -e .
     - name: Lint with ruff
       run: |
-        pip install ruff black mypy
+        pip install ruff black mypy types-PyYAML pandas-stubs
         ruff check .
         black --check --diff .
         mypy src/ssiamb
