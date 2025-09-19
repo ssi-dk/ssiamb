@@ -6,10 +6,8 @@ Tests mosdepth execution, parsing, error handling, and contig filtering logic.
 
 import pytest
 import tempfile
-import shutil
 from pathlib import Path
 from unittest.mock import Mock, patch
-import subprocess
 
 from src.ssiamb.depth import (
     DepthSummary, ContigDepthStats, DepthAnalysisError,

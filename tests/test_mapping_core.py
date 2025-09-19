@@ -7,18 +7,15 @@ and mapping rate calculation that are most critical for coverage.
 
 import pytest
 import tempfile
-import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.ssiamb.mapping import (
-    check_external_tools,
     get_index_files,
     indexes_exist,
     calculate_mapping_rate,
-    MappingError,
-    ExternalToolError
+    MappingError
 )
 from src.ssiamb.models import Mapper
 

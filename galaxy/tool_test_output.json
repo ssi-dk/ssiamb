@@ -1,0 +1,159 @@
+{
+    "summary": {
+        "num_errors": 0,
+        "num_failures": 1,
+        "num_skips": 0,
+        "num_tests": 1
+    },
+    "tests": [
+        {
+            "data": {
+                "inputs": {
+                    "advanced|caller": "bbtools",
+                    "advanced|depth_tool": "mosdepth",
+                    "advanced|dry_run": false,
+                    "advanced|mapper": "minimap2",
+                    "advanced|quiet": false,
+                    "advanced|require_pass": false,
+                    "advanced|verbose": false,
+                    "analysis|dp_cap": "100",
+                    "analysis|dp_min": "10",
+                    "analysis|maf_min": "0.1",
+                    "analysis|mapq": "30",
+                    "mode|assembly": {
+                        "id": "e7ffe800fc9c52a0",
+                        "src": "hda"
+                    },
+                    "mode|mode_select": "self",
+                    "mode|r1": {
+                        "id": "10c7f6ec1712eebe",
+                        "src": "hda"
+                    },
+                    "mode|r2": {
+                        "id": "01016c93d9408be6",
+                        "src": "hda"
+                    },
+                    "outputs|emit_bed": false,
+                    "outputs|emit_matrix": false,
+                    "outputs|emit_multiqc": false,
+                    "outputs|emit_per_contig": false,
+                    "outputs|emit_provenance": false,
+                    "outputs|emit_vcf": false,
+                    "sample_name": "test"
+                },
+                "job": {
+                    "command_line": "mkdir -p outputs &&   ssiamb    self --r1 '/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/files/5/4/c/dataset_54ccff7c-5377-468d-84b4-dd5a9f0344d6.dat' --r2 '/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/files/7/5/0/dataset_75037af0-8832-425d-a628-83a64e0d2418.dat' --assembly '/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/files/9/f/f/dataset_9ffc0c96-787a-44ef-91c6-e2c6ede12542.dat'  --sample 'test'  --outdir outputs  --threads ${GALAXY_SLOTS:-4} --dp-min 10 --maf-min 0.1 --dp-cap 100 --mapq 30  --mapper minimap2 --caller bbtools --depth-tool mosdepth    --tsv-mode overwrite  && if [ -f outputs/*_ambiguous_summary.tsv ]; then mv outputs/*_ambiguous_summary.tsv '/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/job_working_directory/000/4/outputs/dataset_c6d7eb29-f3d6-4ab5-a6de-793230548ef8.dat' fi",
+                    "command_version": "ssiamb version 0.0.0.dev0",
+                    "copied_from_job_id": null,
+                    "create_time": "2025-09-18T18:46:15.374628",
+                    "dependencies": [],
+                    "exit_code": 2,
+                    "external_id": "95520",
+                    "galaxy_version": "25.0",
+                    "handler": null,
+                    "history_id": "10c7f6ec1712eebe",
+                    "id": "dcb14a1798cdcdf2",
+                    "inputs": {
+                        "mode|assembly": {
+                            "id": "e7ffe800fc9c52a0",
+                            "src": "hda",
+                            "uuid": "9ffc0c96-787a-44ef-91c6-e2c6ede12542"
+                        },
+                        "mode|r1": {
+                            "id": "10c7f6ec1712eebe",
+                            "src": "hda",
+                            "uuid": "54ccff7c-5377-468d-84b4-dd5a9f0344d6"
+                        },
+                        "mode|r2": {
+                            "id": "01016c93d9408be6",
+                            "src": "hda",
+                            "uuid": "75037af0-8832-425d-a628-83a64e0d2418"
+                        }
+                    },
+                    "job_messages": [
+                        {
+                            "code_desc": "",
+                            "desc": "Fatal error: Exit code 2 ()",
+                            "error_level": 3.0,
+                            "exit_code": 2,
+                            "type": "exit_code"
+                        }
+                    ],
+                    "job_metrics": [
+                        {
+                            "name": "galaxy_slots",
+                            "plugin": "core",
+                            "raw_value": "1.0000000",
+                            "title": "Cores Allocated",
+                            "value": "1"
+                        },
+                        {
+                            "name": "start_epoch",
+                            "plugin": "core",
+                            "raw_value": "1758221938.0000000",
+                            "title": "Job Start Time",
+                            "value": "2025-09-18 20:58:58"
+                        },
+                        {
+                            "name": "end_epoch",
+                            "plugin": "core",
+                            "raw_value": "1758221951.0000000",
+                            "title": "Job End Time",
+                            "value": "2025-09-18 20:59:11"
+                        },
+                        {
+                            "name": "runtime_seconds",
+                            "plugin": "core",
+                            "raw_value": "13.0000000",
+                            "title": "Job Runtime (Wall Clock)",
+                            "value": "13 seconds"
+                        }
+                    ],
+                    "job_runner_name": null,
+                    "job_stderr": "",
+                    "job_stdout": "",
+                    "model_class": "Job",
+                    "output_collections": {},
+                    "outputs": {
+                        "summary_tsv": {
+                            "id": "dcb14a1798cdcdf2",
+                            "src": "hda",
+                            "uuid": "c6d7eb29-f3d6-4ab5-a6de-793230548ef8"
+                        }
+                    },
+                    "params": {
+                        "__input_ext": "\"input\"",
+                        "advanced": "{\"bbtools_mem\": null, \"caller\": \"bbtools\", \"depth_tool\": \"mosdepth\", \"dry_run\": false, \"mapper\": \"minimap2\", \"quiet\": false, \"require_pass\": false, \"verbose\": false}",
+                        "analysis": "{\"dp_cap\": \"100\", \"dp_min\": \"10\", \"maf_min\": \"0.1\", \"mapq\": \"30\"}",
+                        "chromInfo": "\"/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/galaxy-dev/tool-data/shared/ucsc/chrom/?.len\"",
+                        "dbkey": "\"?\"",
+                        "mode": "{\"__current_case__\": 0, \"assembly\": {\"values\": [{\"id\": 3, \"src\": \"hda\"}]}, \"mode_select\": \"self\", \"r1\": {\"values\": [{\"id\": 1, \"src\": \"hda\"}]}, \"r2\": {\"values\": [{\"id\": 2, \"src\": \"hda\"}]}}",
+                        "outputs": "{\"emit_bed\": false, \"emit_matrix\": false, \"emit_multiqc\": false, \"emit_per_contig\": false, \"emit_provenance\": false, \"emit_vcf\": false}",
+                        "sample_name": "\"test\""
+                    },
+                    "state": "error",
+                    "stderr": "/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/job_working_directory/000/4/tool_script.sh: line 148: syntax error: unexpected end of file\n",
+                    "stdout": "",
+                    "tool_id": "ssiamb",
+                    "tool_stderr": "/private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/job_working_directory/000/4/tool_script.sh: line 148: syntax error: unexpected end of file\n",
+                    "tool_stdout": "",
+                    "update_time": "2025-09-18T18:59:11.558906",
+                    "user_email": "planemo@galaxyproject.org",
+                    "user_id": "10c7f6ec1712eebe"
+                },
+                "output_problems": [
+                    "Job in error state.. tool_id: ssiamb, exit_code: 2, stderr: /private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/job_working_directory/000/4/tool_script.sh: line 148: syntax error: unexpected end of file\n.",
+                    "Job in error state.. tool_id: ssiamb, exit_code: 2, stderr: /private/var/folders/zh/b5snllxs7hxb1881tr9z38gw0000gq/T/tmpdqf8ay8g/job_working_directory/000/4/tool_script.sh: line 148: syntax error: unexpected end of file\n."
+                ],
+                "status": "failure",
+                "test_index": 0,
+                "time_seconds": 793.5605611801147,
+                "tool_id": "ssiamb",
+                "tool_version": "1.0.0+galaxy0"
+            },
+            "has_data": true,
+            "id": "ssiamb-0"
+        }
+    ],
+    "version": "0.1"
+}

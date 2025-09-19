@@ -7,7 +7,6 @@ FASTQ reads and reference genome from SSI pipeline.
 
 import pytest
 import tempfile
-import subprocess
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -317,7 +316,7 @@ class TestMappingRealData:
             assert result['bam_size'] > 1000, f"{mapper_name} should produce non-empty BAM"
         
         # Log comparison results
-        print(f"\\nMapper comparison results:")
+        print("\\nMapper comparison results:")
         for mapper_name, result in results.items():
             print(f"  {mapper_name}:")
             print(f"    Index time: {result['index_time']:.2f}s")
@@ -425,7 +424,7 @@ class TestMappingPerformance:
                 # Sanity check - indexing should complete in reasonable time
                 assert index_time < 120, f"{mapper.value} indexing took too long: {index_time:.2f}s"
         
-        print(f"\\nIndexing performance:")
+        print("\\nIndexing performance:")
         for mapper, index_time in index_times.items():
             print(f"  {mapper}: {index_time:.2f} seconds")
     
@@ -467,7 +466,7 @@ class TestMappingPerformance:
                 # Should complete in reasonable time regardless of thread count
                 assert map_time < 180, f"Mapping with {threads} threads took too long: {map_time:.2f}s"
         
-        print(f"\\nMapping performance by thread count:")
+        print("\\nMapping performance by thread count:")
         for threads, map_time in performance_results.items():
             print(f"  {threads} threads: {map_time:.2f} seconds")
         

@@ -5,11 +5,8 @@ Tests utility functions like extract_ref_accession, version detection,
 and other testable helper functions from the runner module.
 """
 
-import pytest
 import tempfile
-import subprocess
 from pathlib import Path
-from unittest.mock import patch
 
 from src.ssiamb.runner import (
     extract_ref_accession, 

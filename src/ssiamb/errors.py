@@ -11,7 +11,6 @@ Exit code specification:
 - 5: QC failure (only if user opts into --qc-action fail)
 """
 
-import sys
 import typer
 from pathlib import Path
 from typing import List, Optional

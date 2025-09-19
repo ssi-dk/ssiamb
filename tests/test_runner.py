@@ -6,7 +6,6 @@ Tests basic functions in runner.py that can be easily tested.
 
 import pytest
 import tempfile
-import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -16,7 +15,7 @@ from src.ssiamb.runner import (
     detect_reuse_from_plan,
     create_run_plan
 )
-from src.ssiamb.models import Mode, Mapper, Caller, DepthTool, TSVMode
+from src.ssiamb.models import Mode, Mapper, Caller
 
 
 class TestVersionExtraction:

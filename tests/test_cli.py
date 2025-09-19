@@ -7,13 +7,11 @@ Tests CLI argument parsing, command dispatch, error handling, and integration.
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
-import typer
 
 from src.ssiamb.cli import app
-from src.ssiamb.version import __version__
-from src.ssiamb.models import Mode, TSVMode, DepthTool
+from src.ssiamb.models import Mode
 
 
 class TestMainCallback:

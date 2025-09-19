@@ -1,0 +1,2 @@
+sample	ambiguous_snv_count	ambiguous_ins_count	ambiguous_del_count	callable_bases	genome_length	breadth_10x	mean_depth	map_rate	ref_label	ref_accession	bracken_species	bracken_frac	bracken_reads
+test	0	0	0	1000	1000	0.5	10.0	0.95	test_assembly.fasta	NA	NA	NA	NA

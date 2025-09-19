@@ -5,18 +5,15 @@ Tests provenance record creation, JSON output formatting, MD5 calculation,
 and integration with different analysis modes.
 """
 
-import pytest
 import json
 import tempfile
 import hashlib
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 from src.ssiamb.provenance import (
-    ProvenanceRecord, ProvenanceInput, ProvenanceReferenceInfo,
-    ProvenanceSpeciesSelection, ProvenanceMappingStats, ProvenanceCounts,
-    ProvenanceGridCell, ProvenanceExtrasEmitted,
+    ProvenanceRecord, ProvenanceInput, ProvenanceMappingStats, ProvenanceCounts,
     create_provenance_record, write_provenance_json, calculate_md5,
     get_conda_env, get_tool_version
 )

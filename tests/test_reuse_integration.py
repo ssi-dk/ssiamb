@@ -6,15 +6,12 @@ scenarios using real production files from SSI pipeline.
 """
 
 import pytest
-import subprocess
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 from src.ssiamb.reuse import (
     CompatibilityError,
     CompatibilityResult,
-    ContigInfo,
     get_fasta_contigs,
     get_bam_contigs,
     get_vcf_contigs,

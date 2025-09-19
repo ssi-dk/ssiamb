@@ -7,7 +7,6 @@ grid-based counting, and edge cases.
 
 import pytest
 import tempfile
-import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import numpy as np
@@ -17,7 +16,6 @@ from src.ssiamb.vcf_ops import (
     normalize_and_split, 
     classify_variant,
     extract_maf_from_record,
-    parse_vcf_sites,
     count_ambiguous_sites,
     AmbigGrid,
     VariantClass,

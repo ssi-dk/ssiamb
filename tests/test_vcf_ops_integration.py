@@ -6,14 +6,10 @@ counting using real production VCF files from SSI pipeline.
 """
 
 import pytest
-import numpy as np
 from pathlib import Path
-from unittest.mock import patch
 
 from src.ssiamb.vcf_ops import (
     parse_vcf_sites,
-    classify_variant,
-    extract_maf_from_record,
     count_ambiguous_sites,
     AmbigGrid,
     VariantClass,

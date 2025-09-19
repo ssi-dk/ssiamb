@@ -7,22 +7,16 @@ and compatibility thresholds per spec requirements.
 
 import pytest
 import tempfile
-import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-import pysam
 
 from src.ssiamb.reuse import (
     CompatibilityError,
-    CompatibilityResult,
-    ContigInfo,
     get_fasta_contigs,
     get_bam_contigs,
     get_vcf_contigs,
     check_compatibility,
-    check_bam_compatibility,
-    check_vcf_compatibility,
     has_duplicate_flags,
     run_markdup_for_depth
 )

@@ -12,7 +12,7 @@ import logging
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Dict, Set, Tuple, Optional, NamedTuple
+from typing import Dict, Set, Optional
 from dataclasses import dataclass
 import pysam
 
@@ -408,7 +408,7 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
             check=True
         )
         
-        logger.debug(f"samtools markdup completed successfully")
+        logger.debug("samtools markdup completed successfully")
         
         # Clean up intermediate files
         for temp_file in [queryname_bam, fixmate_bam, coord_sorted_bam]:

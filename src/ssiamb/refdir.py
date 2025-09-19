@@ -11,7 +11,7 @@ This module handles:
 import os
 import re
 from pathlib import Path
-from typing import Optional, Dict, List, Set
+from typing import Optional, List
 import logging
 
 logger = logging.getLogger(__name__)

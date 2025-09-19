@@ -7,9 +7,8 @@ Tests I/O functionality including sample name validation/inference, MD5 calculat
 import pytest
 import tempfile
 import hashlib
-import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.ssiamb.io_utils import (
     validate_sample_name,

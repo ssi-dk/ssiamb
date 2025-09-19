@@ -7,7 +7,6 @@ Focused on core functionality and critical edge cases.
 import pytest
 import tempfile
 from pathlib import Path
-import pandas as pd
 
 from src.ssiamb.bracken import (
     BrackenSpecies,

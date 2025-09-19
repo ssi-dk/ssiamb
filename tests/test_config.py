@@ -10,14 +10,13 @@ import tempfile
 import os
 import yaml
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 from src.ssiamb.config import (
     SsiambConfig,
     get_config,
     set_config,
-    load_config,
-    _config
+    load_config
 )
 
 

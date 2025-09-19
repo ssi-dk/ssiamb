@@ -8,10 +8,9 @@ variant classification, and grid-based counting for ambiguous sites.
 import logging
 import subprocess
 import shutil
-import tempfile
 import warnings
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Iterator, Set
+from typing import Optional, List, Tuple, Iterator, Set
 from dataclasses import dataclass
 from enum import Enum
 

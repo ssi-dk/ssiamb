@@ -228,7 +228,7 @@ class TestCallingRealData:
             total_time = map_time + call_time
             assert total_time < 600, f"End-to-end pipeline took too long: {total_time:.2f} seconds"
             
-            print(f"End-to-end pipeline completed:")
+            print("End-to-end pipeline completed:")
             print(f"  Mapping: {map_time:.2f} seconds")
             print(f"  Calling: {call_time:.2f} seconds")
             print(f"  Total: {total_time:.2f} seconds")
@@ -283,7 +283,7 @@ class TestCallingRealData:
             assert result['vcf_size'] > 0, f"{caller_name} should produce non-empty VCF"
         
         # Log comparison results
-        print(f"\\nCaller comparison results:")
+        print("\\nCaller comparison results:")
         for caller_name, result in results.items():
             print(f"  {caller_name}:")
             print(f"    Call time: {result['call_time']:.2f}s")
@@ -442,7 +442,7 @@ class TestCallingPerformance:
                 assert call_time < 400, f"Calling with {threads} threads took too long: {call_time:.2f}s"
                 assert result.success, f"Calling with {threads} threads should succeed"
         
-        print(f"\\nCalling performance by thread count:")
+        print("\\nCalling performance by thread count:")
         for threads, result in performance_results.items():
             print(f"  {threads} threads: {result['call_time']:.2f} seconds")
         
@@ -483,6 +483,6 @@ class TestCallingPerformance:
                 assert call_time < 600, f"{caller.value} calling took too long: {call_time:.2f}s"
                 assert result.success, f"{caller.value} calling should succeed"
         
-        print(f"\\nCaller performance comparison:")
+        print("\\nCaller performance comparison:")
         for caller, call_time in caller_times.items():
             print(f"  {caller}: {call_time:.2f} seconds")

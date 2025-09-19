@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Optional, Annotated
 import typer
 from rich.console import Console
-from rich.table import Table
 
 from .version import __version__
 from .models import Mode, TSVMode, DepthTool
@@ -672,19 +671,19 @@ def summarize(
         
         if dry_run:
             console.print("[yellow]DRY RUN - Summarize mode plan:[/yellow]")
-            console.print(f"  [bold]Input validation:[/bold]")
+            console.print("  [bold]Input validation:[/bold]")
             console.print(f"    VCF file: {vcf} {'✓' if vcf.exists() else '✗ (missing)'}")
             console.print(f"    BAM file: {bam} {'✓' if bam.exists() else '✗ (missing)'}")
             console.print(f"  [bold]Sample name:[/bold] {vcf.stem.split('.')[0] if vcf.exists() else 'unknown'}")
-            console.print(f"  [bold]Analysis plan:[/bold]")
-            console.print(f"    1. Run mosdepth on BAM (MAPQ≥30, depth≥10, exclude duplicates)")
-            console.print(f"    2. Parse VCF for ambiguous sites")
+            console.print("  [bold]Analysis plan:[/bold]")
+            console.print("    1. Run mosdepth on BAM (MAPQ≥30, depth≥10, exclude duplicates)")
+            console.print("    2. Parse VCF for ambiguous sites")
             console.print(f"    3. Count SNVs: dp_min={dp_min}, maf_min={maf_min}, dp_cap={dp_cap}")
-            console.print(f"    4. Count indels and deletions for secondary metrics")
-            console.print(f"    5. Calculate mapping rate from BAM")
-            console.print(f"  [bold]Outputs planned:[/bold]")
+            console.print("    4. Count indels and deletions for secondary metrics")
+            console.print("    5. Calculate mapping rate from BAM")
+            console.print("  [bold]Outputs planned:[/bold]")
             if stdout:
-                console.print(f"    Summary: stdout")
+                console.print("    Summary: stdout")
             else:
                 console.print(f"    Summary: {output or 'ambiguous_summary.tsv'}")
             if emit_vcf:
@@ -698,7 +697,7 @@ def summarize(
             if emit_multiqc:
                 console.print(f"    MultiQC: {vcf.stem}.multiqc.tsv")
             if emit_provenance:
-                console.print(f"    Provenance: run_provenance.json")
+                console.print("    Provenance: run_provenance.json")
             console.print(f"  [bold]Filters:[/bold] {'PASS-only' if require_pass else 'All variants'}")
             console.print("[green]Dry run completed - no files written[/green]")
             return

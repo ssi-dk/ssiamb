@@ -7,10 +7,9 @@ mapping execution, and mapping rate calculation.
 
 import pytest
 import tempfile
-import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from src.ssiamb.mapping import (
     check_external_tools,

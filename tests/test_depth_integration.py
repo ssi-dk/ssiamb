@@ -16,7 +16,6 @@ from src.ssiamb.depth import (
     ContigDepthStats,
     DepthAnalysisError,
     check_mosdepth_available,
-    run_mosdepth,
     parse_mosdepth_summary,
     analyze_depth
 )
@@ -124,7 +123,7 @@ class TestDepthRealData:
                     assert contig_stat.breadth_10x >= 0.0  # May exceed 1.0 due to parsing logic
                 
                 # Log results for inspection
-                print(f"\\nDepth analysis results:")
+                print("\\nDepth analysis results:")
                 print(f"  Callable bases: {summary.callable_bases:,}")
                 print(f"  Genome length: {summary.genome_length:,}")
                 print(f"  Breadth 10x: {summary.breadth_10x:.3f}")
@@ -153,7 +152,7 @@ class TestDepthRealData:
                 assert summary.genome_length > 0
                 assert summary.total_contigs > 0
                 
-                print(f"\\nEnd-to-end depth analysis results:")
+                print("\\nEnd-to-end depth analysis results:")
                 print(f"  Callable bases: {summary.callable_bases:,}")
                 print(f"  Genome length: {summary.genome_length:,}")
                 print(f"  Breadth 10x: {summary.breadth_10x:.3f}")

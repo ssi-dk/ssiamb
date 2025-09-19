@@ -5,12 +5,10 @@ Tests BBTools and bcftools variant calling functionality with mocked subprocess 
 """
 
 import pytest
-from pathlib import Path
 from unittest.mock import Mock, patch
 
 from src.ssiamb.calling import (
-    check_caller_tools, run_bbtools_calling, run_bcftools_calling,
-    call_variants, get_available_callers, VariantCallingError, VariantCallResult
+    check_caller_tools, run_bbtools_calling, call_variants, get_available_callers, VariantCallingError, VariantCallResult
 )
 from src.ssiamb.models import Caller
 

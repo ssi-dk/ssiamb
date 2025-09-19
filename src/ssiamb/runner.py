@@ -6,7 +6,7 @@ of self, ref, and summarize modes by calling appropriate modules.
 """
 
 from pathlib import Path
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple
 import logging
 import time
 import subprocess
@@ -14,11 +14,11 @@ import re
 
 from .models import (
     Mode, Mapper, Caller, DepthTool, SummaryRow, RunPlan, Paths, Thresholds,
-    TSVMode, OnFail
+    TSVMode
 )
 from .io_utils import (
     infer_sample_name, validate_sample_name, write_tsv_summary, 
-    write_tsv_to_stdout, SampleNameError
+    write_tsv_to_stdout
 )
 from .refdir import (
     resolve_reference_directory, resolve_species_to_fasta, 
@@ -32,21 +32,20 @@ from .depth import (
     analyze_depth, DepthAnalysisError, check_mosdepth_available
 )
 from .calling import (
-    call_variants, VariantCallingError, check_caller_tools, caller_tools_available, VariantCallResult
+    call_variants, VariantCallingError, caller_tools_available
 )
 from .vcf_ops import (
     normalize_and_split, count_ambiguous_sites, VCFOperationError,
-    VariantClass, check_vcf_tools, emit_vcf, emit_bed, emit_matrix, emit_per_contig, emit_multiqc
+    VariantClass, emit_vcf, emit_bed, emit_matrix, emit_per_contig, emit_multiqc
 )
 from .mapping import calculate_mapping_rate
 from .reuse import has_duplicate_flags, run_markdup_for_depth, CompatibilityError
-from .qc import check_qc_metrics, log_qc_warnings, format_qc_warnings_for_summary
+from .qc import check_qc_metrics, log_qc_warnings
 from .provenance import (
-    create_provenance_record, write_provenance_json, ProvenanceRecord,
-    ProvenanceMappingStats, ProvenanceSpeciesSelection, ProvenanceCounts
+    create_provenance_record, ProvenanceRecord,
+    ProvenanceMappingStats, ProvenanceCounts
 )
 from .version import __version__
-import time
 import pysam
 
 logger = logging.getLogger(__name__)
@@ -432,14 +431,14 @@ def run_self(plan: RunPlan) -> SummaryRow:
         print(f"  📁 Inputs: {plan.paths.r1.name} + {plan.paths.r2.name} → {plan.paths.assembly.name}")
         print(f"  🔧 Tools: {plan.mapper.value} mapper, {plan.caller.value} caller, mosdepth")
         print(f"  📊 Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}, mapq≥{plan.thresholds.mapq_min}")
-        print(f"  ⚙️  Steps planned:")
+        print("  ⚙️  Steps planned:")
         print(f"    1. Check tool availability ({plan.mapper.value}, samtools, mosdepth, {plan.caller.value})")
         print(f"    2. Ensure/build {plan.mapper.value} indexes for assembly")
         print(f"    3. Map reads to assembly → {plan.sample}.sorted.bam")
         print(f"    4. Run depth analysis → {plan.sample}.depth.mosdepth.summary.txt")
         print(f"    5. Call variants → {plan.sample}.vcf")
         print(f"    6. Normalize/split VCF → {plan.sample}.normalized.vcf.gz")
-        print(f"    7. Count ambiguous sites and generate summary")
+        print("    7. Count ambiguous sites and generate summary")
         if plan.emit_vcf:
             print(f"    8. Emit filtered VCF → {plan.sample}.ambiguous_sites.vcf.gz")
         if plan.emit_bed:
@@ -979,14 +978,14 @@ def run_ref(plan: RunPlan, **kwargs) -> SummaryRow:
         print(f"  📖 Reference: {reference_path.name if reference_path else 'TBD'}")
         print(f"  🔧 Tools: {plan.mapper.value} mapper, {plan.caller.value} caller, mosdepth")
         print(f"  📊 Thresholds: dp_min={plan.thresholds.dp_min}, maf_min={plan.thresholds.maf_min}, mapq≥{plan.thresholds.mapq_min}")
-        print(f"  ⚙️  Steps planned:")
+        print("  ⚙️  Steps planned:")
         print(f"    1. Resolve reference from {ref_source}")
         print(f"    2. Check tool availability ({plan.mapper.value}, samtools, mosdepth, {plan.caller.value})")
         print(f"    3. Map reads to reference → {plan.sample}.sorted.bam")
         print(f"    4. Run depth analysis → {plan.sample}.depth.mosdepth.summary.txt")
         print(f"    5. Call variants → {plan.sample}.vcf")
         print(f"    6. Normalize/split VCF → {plan.sample}.normalized.vcf.gz")
-        print(f"    7. Count ambiguous sites and generate summary")
+        print("    7. Count ambiguous sites and generate summary")
         if plan.emit_vcf:
             print(f"    8. Emit filtered VCF → {plan.sample}.ambiguous_sites.vcf.gz")
         if plan.emit_bed:
@@ -1445,8 +1444,7 @@ def run_summarize(
     from .depth import analyze_depth, list_included_contigs
     from .vcf_ops import (
         count_ambiguous_sites, emit_vcf as emit_vcf_file, emit_bed as emit_bed_file,
-        emit_matrix as emit_matrix_file, emit_per_contig as emit_per_contig_file,
-        emit_multiqc as emit_multiqc_file, VariantClass
+        emit_matrix as emit_matrix_file, VariantClass
     )
     from .io_utils import infer_sample_name, validate_sample_name, write_tsv_summary, write_tsv_to_stdout
     from .models import TSVMode

@@ -8,7 +8,6 @@ information when --emit-provenance is used.
 import json
 import hashlib
 import os
-import platform
 import sys
 from dataclasses import dataclass, asdict
 from datetime import datetime

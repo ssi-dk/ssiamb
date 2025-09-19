@@ -11,9 +11,8 @@ This module provides functionality for:
 import subprocess
 import logging
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional
+from typing import List, Set
 from dataclasses import dataclass
-import re
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ import logging
 import subprocess
 import shutil
 from pathlib import Path
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Dict
 from dataclasses import dataclass
 
 from .models import Caller
@@ -296,9 +296,9 @@ def run_bcftools_calling(
         mpileup_cmd = [
             "bcftools", "mpileup",
             "-Ou",                     # Uncompressed BCF output (required by spec)
-            f"--threads", str(threads),
-            f"-q", str(mapq_min),      # Minimum mapping quality
-            f"-Q", str(baseq_min),     # Minimum base quality
+            "--threads", str(threads),
+            "-q", str(mapq_min),      # Minimum mapping quality
+            "-Q", str(baseq_min),     # Minimum base quality
             "-B",                      # Disable BAQ computation
             "--max-depth", "100000",   # Maximum depth (required by spec)
             "-a", "FORMAT/AD,ADF,ADR,DP",  # Annotations to include (fixed format)
@@ -308,7 +308,7 @@ def run_bcftools_calling(
         
         call_cmd = [
             "bcftools", "call",
-            f"--threads", str(threads),
+            "--threads", str(threads),
             "-m",                      # Multiallelic caller
             "--ploidy", "1",           # Haploid organism
             "--prior", "1.1e-3",       # Prior for novel mutation rate (required by spec)

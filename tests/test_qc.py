@@ -5,8 +5,6 @@ Tests the QC threshold validation, warning generation, and integration
 with the summary reporting system.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
 import logging
 
 from src.ssiamb.qc import (

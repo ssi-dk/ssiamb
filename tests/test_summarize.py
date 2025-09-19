@@ -12,13 +12,10 @@ Tests the run_summarize function and summarize CLI command to ensure:
 import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
 from typer.testing import CliRunner
 
 from ssiamb.cli import app
 from ssiamb.runner import run_summarize
-from ssiamb.models import SummaryRow, Thresholds
-from ssiamb.io_utils import SampleNameError
 
 
 class TestSummarizeFunction:

@@ -1,0 +1,70 @@
+{% set name = "ssiamb" %}
+{% set version = "1.0.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/ssiamb-{{ version }}.tar.gz
+  sha256: # This will need to be filled in with the actual SHA256 of the PyPI release
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+  entry_points:
+    - ssiamb = ssiamb.cli:app
+
+requirements:
+  host:
+    - python >=3.9
+    - pip
+    - hatchling
+  run:
+    - python >=3.9
+    - typer >=0.12.0
+    - rich >=13.0.0
+    - click >=8.0.0
+    - pysam >=0.22.0
+    - pandas >=2.0.0
+    - numpy >=1.24.0
+    - minimap2 >=2.24
+    - bwa-mem2 >=2.2
+    - samtools >=1.17
+    - bcftools >=1.17
+    - bbmap >=39.0
+    - mosdepth >=0.3.3
+    - bedtools >=2.30
+    - htslib >=1.17
+
+test:
+  imports:
+    - ssiamb
+    - ssiamb.cli
+    - ssiamb.core
+  commands:
+    - ssiamb --help
+    - ssiamb --version
+    - ssiamb self --help
+    - ssiamb ref --help
+
+about:
+  home: https://github.com/ssi-dk/ssiamb
+  summary: A tool for counting ambiguous sites in bacterial isolate sequences
+  description: |
+    ssiamb is a command-line tool for counting ambiguous sites in bacterial isolate 
+    sequences by comparing short reads to their assemblies. It supports both 
+    self-mode (reads vs their own assembly) and ref-mode (reads vs reference genome).
+    
+    The tool integrates multiple bioinformatics tools including minimap2/BWA-mem2 
+    for alignment, bcftools/bbtools for variant calling, and mosdepth for depth 
+    calculation to provide comprehensive analysis of sequence ambiguity.
+  license: MIT
+  license_file: LICENSE
+  doc_url: https://github.com/ssi-dk/ssiamb
+  dev_url: https://github.com/ssi-dk/ssiamb
+
+extra:
+  recipe-maintainers:
+    - PovilasMat
