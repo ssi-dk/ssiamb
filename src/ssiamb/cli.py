@@ -27,7 +27,7 @@ app = typer.Typer(
 
 
 # Configure console for better test compatibility
-def _is_test_environment():
+def _is_test_environment() -> bool:
     """Detect if we're running in a test environment."""
     return (
         "pytest" in sys.modules
