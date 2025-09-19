@@ -179,6 +179,105 @@ This project is developed by the SSI team. For questions or contributions, pleas
 
 - Povilas Matusevicius <pmat@ssi.dk>
 
+## Release Process
+
+This project uses automated publishing to PyPI, Bioconda, and Galaxy ToolShed. The release process is as follows:
+
+### 1. Version Update
+
+1. Update version in `pyproject.toml`:
+
+   ```toml
+   [project]
+   version = "1.0.0"  # Update this
+   ```
+
+2. Update version in `recipes/ssiamb/meta.yaml`:
+
+   ```yaml
+   {% set version = "1.0.0" %}  # Update this
+   ```
+
+3. Update version in `galaxy/ssiamb.xml`:
+
+   ```xml
+   <tool id="ssiamb" name="Ambiguous Sites Counter" version="1.0.0+galaxy0">
+   ```
+
+### 2. Create Release
+
+1. Commit version changes:
+
+   ```bash
+   git add pyproject.toml recipes/ssiamb/meta.yaml galaxy/ssiamb.xml
+   git commit -m "Bump version to v1.0.0"
+   git push origin main
+   ```
+
+2. Create and push tag:
+
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+### 3. Automated Publishing
+
+#### PyPI Publishing (Automatic)
+
+- GitHub Actions automatically publishes to PyPI on tag push
+- Uses PyPI Trusted Publishing (OIDC) - no tokens needed
+- Creates signed GitHub release with artifacts
+
+#### Bioconda Publishing (Manual)
+
+1. Wait for PyPI release to complete
+2. Update `recipes/ssiamb/meta.yaml` with correct SHA256:
+
+   ```bash
+   # Get SHA256 from PyPI release
+   pip download ssiamb==1.0.0 --no-deps
+   shasum -a 256 ssiamb-1.0.0.tar.gz
+   ```
+
+3. Fork [bioconda/bioconda-recipes](https://github.com/bioconda/bioconda-recipes)
+4. Copy `recipes/ssiamb/` to `recipes/ssiamb/` in the fork
+5. Create pull request to bioconda-recipes
+6. Address review feedback and wait for merge
+
+#### Galaxy ToolShed Publishing (Manual)
+
+1. Install planemo: `pip install planemo`
+2. Test wrapper: `planemo test galaxy/ssiamb.xml` (may fail until bioconda is available)
+3. Create account on [Galaxy ToolShed](https://toolshed.g2.bx.psu.edu/)
+4. Upload wrapper:
+
+   ```bash
+   cd galaxy/
+   planemo shed_upload --shed_target toolshed
+   ```
+
+### 4. Post-Release
+
+1. Verify all distributions:
+   - PyPI: <https://pypi.org/project/ssiamb/>
+   - Bioconda: <https://anaconda.org/bioconda/ssiamb>
+   - Galaxy ToolShed: <https://toolshed.g2.bx.psu.edu/>
+   - BioContainers: <https://quay.io/repository/biocontainers/ssiamb>
+
+2. Update documentation if needed
+3. Announce release
+
+### Version Numbering
+
+- Use semantic versioning: `MAJOR.MINOR.PATCH`
+- Galaxy wrapper versions: `SOFTWARE_VERSION+galaxy0` (increment galaxy# for wrapper-only changes)
+- Pre-releases: `1.0.0rc1`, `1.0.0a1`, etc.
+
+### Troubleshooting
+
+See `PYPI_SETUP.md` for PyPI Trusted Publishing configuration details.
+
 ## Citation
 
 > **Note**: Citation information will be provided upon publication.

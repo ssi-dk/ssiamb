@@ -236,29 +236,29 @@ Legend:
 ---
 
 ## 23) Galaxy Wrapper (ToolShed)
-- [ ] Create `galaxy/ssiamb.xml` with params per spec (Mode, inputs, outputs, Advanced, Logging/QC).
-- [ ] Add defaults: threads=4, memory=16 GB, walltime=2 h.
-- [ ] Autolink Bioconda/BioContainer metadata.
-- [ ] Add **tiny self‑mode functional test** (file set TBD by maintainer) so `planemo test` passes.
-- [ ] **Acceptance:** `planemo lint` passes; local test passes with placeholder dataset when ready.
+- [x] Create `galaxy/ssiamb.xml` with params per spec (Mode, inputs, outputs, Advanced, Logging/QC).
+- [x] Add defaults: threads=4, memory=16 GB, walltime=2 h.
+- [x] Autolink Bioconda/BioContainer metadata.
+- [x] Add **tiny self‑mode functional test** (file set TBD by maintainer) so `planemo test` passes.
+- [x] **Acceptance:** `planemo lint` passes; local test passes with placeholder dataset when ready.
 
 ---
 
 ## 24) CI/CD — PyPI Trusted Publishing
-- [ ] GitHub Actions workflow:
-  - [ ] Build sdist/wheel on tag `v*`
-  - [ ] Use **PyPI Trusted Publishing** (OIDC); project on PyPI accepts trusted publishing
-  - [ ] Upload to PyPI on successful build
-- [ ] Protect main; add basic lint/test job (optional per spec).
-- [ ] **Acceptance:** Dry-run of workflow shows correct steps; publish on `v0.1` tag.
+- [x] GitHub Actions workflow:
+  - [x] Build sdist/wheel on tag `v*`
+  - [x] Use **PyPI Trusted Publishing** (OIDC); project on PyPI accepts trusted publishing
+  - [x] Upload to PyPI on successful build
+- [x] Protect main; add basic lint/test job (optional per spec).
+- [x] **Acceptance:** Dry-run of workflow shows correct steps; publish on `v0.1` tag.
 
 ---
 
 ## 25) Bioconda Recipe & BioContainer
-- [ ] Create Bioconda recipe with PEP 517 build (`pip install .`), run‑deps for external tools.
-- [ ] Ensure it produces a BioContainer automatically.
-- [ ] Add maintainer handle: `PovilasMat`.
-- [ ] **Acceptance:** Local conda build succeeds; PR opened/merged in bioconda‑recipes.
+- [x] Create Bioconda recipe with PEP 517 build (`pip install .`), run‑deps for external tools.
+- [x] Ensure it produces a BioContainer automatically.
+- [x] Add maintainer handle: `PovilasMat`.
+- [x] **Acceptance:** Local conda build succeeds; PR opened/merged in bioconda‑recipes.
 
 ---
 
