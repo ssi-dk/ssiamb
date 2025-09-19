@@ -1,4 +1,6 @@
 name: ssiamb
+# Only use conda-forge and bioconda channels for reproducible builds
+# Explicitly avoid defaults channel to prevent conflicts
 channels:
   - bioconda
   - conda-forge
