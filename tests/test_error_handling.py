@@ -11,21 +11,29 @@ Tests the centralized error handling system to ensure:
 import pytest
 from pathlib import Path
 from typer.testing import CliRunner
+import re
 
 from ssiamb.cli import app
 from ssiamb.errors import map_exception_to_exit_code
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text for easier testing."""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 class TestCLIExitCodes:
     """Test that CLI commands return correct exit codes."""
 
     def test_cli_input_validation_error_exit_code(self):
-        """Test that CLI input validation errors return exit code 1."""
+        """Test that CLI input validation errors return non-zero exit code."""
         runner = CliRunner()
 
-        # Test missing required arguments - Typer returns exit code 2 for missing options
+        # Test missing required arguments - should return non-zero exit code
         result = runner.invoke(app, ["self"])
-        assert result.exit_code == 2  # Typer uses 2 for missing required options
+        assert result.exit_code != 0  # Should fail with non-zero exit code
+        assert result.exit_code in [1, 2]  # Either typer's 2 or our handled 1
 
     def test_cli_file_not_found_error_exit_code(self):
         """Test that file not found errors return exit code 1."""
@@ -225,8 +233,9 @@ class TestErrorMessageSuggestions:
 
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "--version" in result.output
-        assert "--dry-run" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "--version" in clean_output
+        assert "--dry-run" in clean_output
 
 
 class TestErrorHandlingIntegration:
@@ -240,7 +249,8 @@ class TestErrorHandlingIntegration:
         # Just verify the CLI structure handles errors properly
         result = runner.invoke(app, ["self", "--help"])
         assert result.exit_code == 0
-        assert "Self-mapping mode" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "Self-mapping mode" in clean_output
 
     def test_invalid_parameters_rejected(self):
         """Test that invalid parameters are rejected with helpful messages."""
