@@ -18,6 +18,12 @@ from ssiamb.cli import app
 from ssiamb.version import __version__
 
 
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text for easier testing."""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
+
+
 class TestVersionCommand:
     """Test --version flag functionality."""
 
@@ -27,7 +33,7 @@ class TestVersionCommand:
 
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert f"ssiamb version {__version__}" in result.output
+        assert f"ssiamb version {__version__}" in strip_ansi_codes(result.output)
 
     def test_version_flag_short_form(self):
         """Test that -V also shows version."""
@@ -35,7 +41,7 @@ class TestVersionCommand:
 
         result = runner.invoke(app, ["-V"])
         assert result.exit_code == 0
-        assert f"ssiamb version {__version__}" in result.output
+        assert f"ssiamb version {__version__}" in strip_ansi_codes(result.output)
 
     def test_version_format(self):
         """Test that version follows semantic versioning pattern."""
@@ -53,7 +59,7 @@ class TestVersionCommand:
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
         # Should not show help or subcommand info
-        assert "Commands:" not in result.output
+        assert "Commands:" not in strip_ansi_codes(result.output)
 
 
 class TestCLIHelp:
@@ -67,12 +73,13 @@ class TestCLIHelp:
         assert result.exit_code == 0
 
         # Check essential elements (Rich CLI uses "Commands" in a styled box)
-        assert "ssiamb" in result.output
-        assert "SSI Ambiguous Site Detection Tool" in result.output
-        assert "Commands" in result.output  # Rich formatting shows Commands
-        assert "self" in result.output
-        assert "ref" in result.output
-        assert "summarize" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "ssiamb" in clean_output
+        assert "SSI Ambiguous Site Detection Tool" in clean_output
+        assert "Commands" in clean_output  # Rich formatting shows Commands
+        assert "self" in clean_output
+        assert "ref" in clean_output
+        assert "summarize" in clean_output
 
     def test_main_help_shows_global_options(self):
         """Test that main help shows global options."""
@@ -82,11 +89,12 @@ class TestCLIHelp:
         assert result.exit_code == 0
 
         # Check global options
-        assert "--version" in result.output
-        assert "--config" in result.output
-        assert "--verbose" in result.output
-        assert "--quiet" in result.output
-        assert "--dry-run" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "--version" in clean_output
+        assert "--config" in clean_output
+        assert "--verbose" in clean_output
+        assert "--quiet" in clean_output
+        assert "--dry-run" in clean_output
 
     def test_self_help_output(self):
         """Test self command help output."""
@@ -96,10 +104,11 @@ class TestCLIHelp:
         assert result.exit_code == 0
 
         # Check self-specific options
-        assert "--r1" in result.output
-        assert "--r2" in result.output
-        assert "--assembly" in result.output
-        assert "Self-mapping mode" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "--r1" in clean_output
+        assert "--r2" in clean_output
+        assert "--assembly" in clean_output
+        assert "Self-mapping mode" in clean_output
 
     def test_ref_help_output(self):
         """Test ref command help output."""
@@ -109,14 +118,15 @@ class TestCLIHelp:
         assert result.exit_code == 0
 
         # Check ref-specific options
-        assert "--r1" in result.output
-        assert "--r2" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "--r1" in clean_output
+        assert "--r2" in clean_output
         assert (
-            "--reference" in result.output
-            or "--species" in result.output
-            or "--bracken" in result.output
+            "--reference" in clean_output
+            or "--species" in clean_output
+            or "--bracken" in clean_output
         )
-        assert "Reference-mapping mode" in result.output
+        assert "Reference-mapping mode" in clean_output
 
     def test_summarize_help_output(self):
         """Test summarize command help output."""
@@ -126,9 +136,10 @@ class TestCLIHelp:
         assert result.exit_code == 0
 
         # Check summarize-specific options
-        assert "--vcf" in result.output
-        assert "--bam" in result.output
-        assert "Summarize VCF and BAM files" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "--vcf" in clean_output
+        assert "--bam" in clean_output
+        assert "Summarize VCF and BAM files" in clean_output
 
     def test_help_shows_common_options(self):
         """Test that command help shows common analysis options."""
@@ -139,10 +150,11 @@ class TestCLIHelp:
             assert result.exit_code == 0
 
             # Common analysis options should appear
-            assert "--dp-min" in result.output
-            assert "--maf-min" in result.output
-            assert "--emit-vcf" in result.output
-            assert "--stdout" in result.output
+            clean_output = strip_ansi_codes(result.output)
+            assert "--dp-min" in clean_output
+            assert "--maf-min" in clean_output
+            assert "--emit-vcf" in clean_output
+            assert "--stdout" in clean_output
 
     def test_help_shows_required_vs_optional(self):
         """Test that help clearly indicates required vs optional parameters."""
@@ -151,12 +163,13 @@ class TestCLIHelp:
         result = runner.invoke(app, ["summarize", "--help"])
         assert result.exit_code == 0
 
+        clean_output = strip_ansi_codes(result.output)
         # Required options should be marked
-        assert "*" in result.output  # Typer marks required options with *
+        assert "*" in clean_output  # Typer marks required options with *
 
         # VCF and BAM should be required for summarize
-        vcf_line = [line for line in result.output.split("\n") if "--vcf" in line]
-        bam_line = [line for line in result.output.split("\n") if "--bam" in line]
+        vcf_line = [line for line in clean_output.split("\n") if "--vcf" in line]
+        bam_line = [line for line in clean_output.split("\n") if "--bam" in line]
 
         assert len(vcf_line) > 0
         assert len(bam_line) > 0
@@ -171,7 +184,8 @@ class TestCLIUsability:
 
         result = runner.invoke(app, [])
         # Should show help rather than error
-        assert "Commands" in result.output or "Usage:" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "Commands" in clean_output or "Usage:" in clean_output
 
     def test_invalid_command_shows_error(self):
         """Test that invalid commands show helpful error."""
@@ -180,7 +194,8 @@ class TestCLIUsability:
         result = runner.invoke(app, ["invalid_command"])
         assert result.exit_code != 0
         # Should suggest available commands or show help
-        assert "No such command" in result.output or "Usage:" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "No such command" in clean_output or "Usage:" in clean_output
 
     def test_conflicting_flags_handled(self):
         """Test that conflicting flags are handled properly."""
@@ -208,8 +223,9 @@ class TestCLIUsability:
             "--emit-provenance",
         ]
 
+        clean_output = strip_ansi_codes(result.output)
         for flag in emission_flags:
-            assert flag in result.output
+            assert flag in clean_output
 
 
 class TestPackagingMetadata:

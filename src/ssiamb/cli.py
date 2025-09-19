@@ -32,13 +32,25 @@ def _is_test_environment() -> bool:
     return (
         "pytest" in sys.modules
         or os.getenv("PYTEST_CURRENT_TEST") is not None
-        or os.getenv("CI") == "true"
-        or os.getenv("GITHUB_ACTIONS") == "true"
+        or os.getenv("CI") is not None  # CI environments often set CI=true or CI=1
+        or os.getenv("GITHUB_ACTIONS") is not None
+        or os.getenv("RUNNER_OS") is not None  # GitHub Actions specific
         or "unittest" in sys.modules
     )
 
 
-console = Console(force_terminal=not _is_test_environment())
+# Set NO_COLOR environment variable for test environments
+if _is_test_environment():
+    os.environ["NO_COLOR"] = "1"
+    os.environ["FORCE_COLOR"] = "0"
+
+console = Console(
+    force_terminal=not _is_test_environment(),
+    no_color=_is_test_environment(),  # Completely disable colors in test environments
+    width=80 if _is_test_environment() else None,  # Fixed width for consistent output
+    legacy_windows=False,  # Disable legacy Windows console behavior
+    _environ={"NO_COLOR": "1"} if _is_test_environment() else None,  # Force NO_COLOR
+)
 
 
 def version_callback(value: bool) -> None:

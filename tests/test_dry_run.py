@@ -13,8 +13,15 @@ import pytest
 import tempfile
 from pathlib import Path
 from typer.testing import CliRunner
+import re
 
 from ssiamb.cli import app
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text for easier testing."""
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 class TestDryRunGlobal:
@@ -26,8 +33,9 @@ class TestDryRunGlobal:
 
         # Test that --dry-run is recognized as global option
         result = runner.invoke(app, ["--help"])
-        assert "--dry-run" in result.output
-        assert "Show what would be done without executing" in result.output
+        clean_output = strip_ansi_codes(result.output)
+        assert "--dry-run" in clean_output
+        assert "Show what would be done without executing" in clean_output
 
     def test_dry_run_exits_zero_on_validation_error(self):
         """Test that dry-run still validates inputs but doesn't fail hard."""
