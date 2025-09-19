@@ -96,4 +96,3 @@ dependencies:
       # Legacy tools (can be removed if not needed)
       - flake8==7.3.0
       - mccabe==0.7.0
-prefix: /Users/B246654/vscode_storage/ssi-dk/ssiamb/env
