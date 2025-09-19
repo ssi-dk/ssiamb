@@ -24,7 +24,7 @@ class TestBrackenParsing:
 
     def create_test_bracken_file(self, content: str) -> Path:
         """Helper to create temporary Bracken file."""
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.tsv', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False)
         temp_file.write(content)
         temp_file.close()
         return Path(temp_file.name)
@@ -37,16 +37,16 @@ Listeria innocua\t1642\tS\t5984\t764\t6748\t0.00360
 Escherichia coli\t562\tG\t1000\t500\t1500\t0.00080"""
 
         file_path = self.create_test_bracken_file(content)
-        
+
         try:
             species_list = parse_bracken_file(file_path)
-            
+
             # Should only get species-level entries (taxonomy_lvl == "S")
             assert len(species_list) == 2
             assert species_list[0].name == "Listeria monocytogenes"
             assert species_list[0].new_est_reads == 1864002
             assert species_list[0].fraction_total_reads == 0.99520
-            
+
         finally:
             file_path.unlink()
 
@@ -55,7 +55,7 @@ Escherichia coli\t562\tG\t1000\t500\t1500\t0.00080"""
         # Missing file
         with pytest.raises(FileNotFoundError):
             parse_bracken_file(Path("nonexistent.tsv"))
-        
+
         # Empty file
         empty_file = self.create_test_bracken_file("")
         try:
@@ -72,19 +72,31 @@ class TestSpeciesSelection:
         """Create test species data."""
         return [
             BrackenSpecies(
-                name="Listeria monocytogenes", taxonomy_id=1639, taxonomy_lvl="S",
-                kraken_assigned_reads=1718713, added_reads=145289, 
-                new_est_reads=1864002, fraction_total_reads=0.99520
+                name="Listeria monocytogenes",
+                taxonomy_id=1639,
+                taxonomy_lvl="S",
+                kraken_assigned_reads=1718713,
+                added_reads=145289,
+                new_est_reads=1864002,
+                fraction_total_reads=0.99520,
             ),
             BrackenSpecies(
-                name="Escherichia coli", taxonomy_id=562, taxonomy_lvl="S",
-                kraken_assigned_reads=45000, added_reads=55000,
-                new_est_reads=100000, fraction_total_reads=0.70000
+                name="Escherichia coli",
+                taxonomy_id=562,
+                taxonomy_lvl="S",
+                kraken_assigned_reads=45000,
+                added_reads=55000,
+                new_est_reads=100000,
+                fraction_total_reads=0.70000,
             ),
             BrackenSpecies(
-                name="Salmonella enterica", taxonomy_id=28901, taxonomy_lvl="S",
-                kraken_assigned_reads=30000, added_reads=20000,
-                new_est_reads=50000, fraction_total_reads=0.35000
+                name="Salmonella enterica",
+                taxonomy_id=28901,
+                taxonomy_lvl="S",
+                kraken_assigned_reads=30000,
+                added_reads=20000,
+                new_est_reads=50000,
+                fraction_total_reads=0.35000,
             ),
         ]
 
@@ -92,7 +104,7 @@ class TestSpeciesSelection:
         """Test basic species selection with default thresholds."""
         species_list = self.create_test_species()
         selection = select_species(species_list, BrackenThresholds())
-        
+
         assert selection is not None
         assert selection.species.name == "Listeria monocytogenes"
         assert selection.rank == 1
@@ -101,7 +113,7 @@ class TestSpeciesSelection:
         """Test when no species meet thresholds."""
         species_list = self.create_test_species()
         strict_thresholds = BrackenThresholds(min_frac=0.999, min_reads=2000000)
-        
+
         selection = select_species(species_list, strict_thresholds)
         assert selection is None
 
@@ -110,17 +122,25 @@ class TestSpeciesSelection:
         # Equal read counts, different fractions
         species_list = [
             BrackenSpecies(
-                name="Species A", taxonomy_id=1, taxonomy_lvl="S",
-                kraken_assigned_reads=50000, added_reads=50000,
-                new_est_reads=100000, fraction_total_reads=0.75000
+                name="Species A",
+                taxonomy_id=1,
+                taxonomy_lvl="S",
+                kraken_assigned_reads=50000,
+                added_reads=50000,
+                new_est_reads=100000,
+                fraction_total_reads=0.75000,
             ),
             BrackenSpecies(
-                name="Species B", taxonomy_id=2, taxonomy_lvl="S",
-                kraken_assigned_reads=50000, added_reads=50000,
-                new_est_reads=100000, fraction_total_reads=0.70000
+                name="Species B",
+                taxonomy_id=2,
+                taxonomy_lvl="S",
+                kraken_assigned_reads=50000,
+                added_reads=50000,
+                new_est_reads=100000,
+                fraction_total_reads=0.70000,
             ),
         ]
-        
+
         selection = select_species(species_list, BrackenThresholds())
         assert selection is not None
         assert selection.species.name == "Species A"  # Higher fraction wins
@@ -129,7 +149,7 @@ class TestSpeciesSelection:
         """Test selection with custom thresholds."""
         species_list = self.create_test_species()
         loose_thresholds = BrackenThresholds(min_frac=0.30, min_reads=40000)
-        
+
         selection = select_species(species_list, loose_thresholds)
         assert selection is not None
         assert selection.species.name == "Listeria monocytogenes"
@@ -140,7 +160,7 @@ class TestFileToSelectionWorkflow:
 
     def create_test_bracken_file(self, content: str) -> Path:
         """Helper to create temporary Bracken file."""
-        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.tsv', delete=False)
+        temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False)
         temp_file.write(content)
         temp_file.close()
         return Path(temp_file.name)
@@ -151,7 +171,7 @@ class TestFileToSelectionWorkflow:
 Listeria monocytogenes\t1639\tS\t1718713\t145289\t1864002\t0.99520"""
 
         file_path = self.create_test_bracken_file(content)
-        
+
         try:
             selection = select_species_from_file(file_path)
             assert selection is not None
@@ -165,11 +185,11 @@ Listeria monocytogenes\t1639\tS\t1718713\t145289\t1864002\t0.99520"""
 Escherichia coli\t562\tS\t45000\t5000\t50000\t0.50000"""
 
         file_path = self.create_test_bracken_file(content)
-        
+
         try:
             with pytest.raises(BrackenSelectionError) as exc_info:
                 select_species_from_file(file_path)
-            
+
             error_msg = str(exc_info.value)
             assert "No species" in error_msg
             assert "0.70 fraction" in error_msg
@@ -186,7 +206,7 @@ class TestThresholdValidation:
         """Test validation of invalid threshold values."""
         with pytest.raises(ValueError, match="min_frac must be between 0.0 and 1.0"):
             BrackenThresholds(min_frac=1.5)
-        
+
         with pytest.raises(ValueError, match="min_reads must be >= 0"):
             BrackenThresholds(min_reads=-1)
 
@@ -201,12 +221,16 @@ class TestSpeciesNameNormalization:
 
     def test_strain_removal(self):
         """Test removal of strain/serovar information."""
-        result = normalize_species_name_for_resolution("Salmonella enterica serovar Typhimurium")
+        result = normalize_species_name_for_resolution(
+            "Salmonella enterica serovar Typhimurium"
+        )
         assert result == "Salmonella_enterica"
 
     def test_invalid_name_format(self):
         """Test error for invalid species format."""
-        with pytest.raises(ValueError, match="Species name must contain at least genus and species"):
+        with pytest.raises(
+            ValueError, match="Species name must contain at least genus and species"
+        ):
             normalize_species_name_for_resolution("Bacteria")
 
 
