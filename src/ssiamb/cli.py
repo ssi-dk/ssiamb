@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, Annotated
 import typer
 from rich.console import Console
+import os
 
 from .version import __version__
 from .models import Mode, TSVMode, DepthTool
@@ -23,7 +24,8 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
-console = Console()
+# Configure console for better test compatibility
+console = Console(force_terminal=not os.getenv("PYTEST_CURRENT_TEST"))
 
 
 def version_callback(value: bool) -> None:
@@ -199,6 +201,17 @@ def self(
     where the assembly may not represent the true sequence.
     """
     try:
+        # Validate required parameters
+        if not r1:
+            console.print("[red]Error: Missing option '--r1'[/red]")
+            raise typer.Exit(2)
+        if not r2:
+            console.print("[red]Error: Missing option '--r2'[/red]")
+            raise typer.Exit(2)
+        if not assembly:
+            console.print("[red]Error: Missing option '--assembly'[/red]")
+            raise typer.Exit(2)
+
         # Validate emit flags with stdout
         if stdout and any(
             [
@@ -409,6 +422,19 @@ def ref(
     Reference can be provided directly, looked up by species, or selected from Bracken.
     """
     try:
+        # Validate required parameters
+        if not r1:
+            console.print("[red]Error: Missing option '--r1'[/red]")
+            raise typer.Exit(2)
+        if not r2:
+            console.print("[red]Error: Missing option '--r2'[/red]")
+            raise typer.Exit(2)
+        
+        # At least one of reference, species, or bracken must be provided
+        if not any([reference, species, bracken]):
+            console.print("[red]Error: Must provide one of --reference, --species, or --bracken[/red]")
+            raise typer.Exit(2)
+
         # Validate emit flags with stdout
         if stdout and any(
             [
@@ -575,6 +601,14 @@ def summarize(
     ambiguous site statistics.
     """
     try:
+        # Validate required parameters
+        if not vcf:
+            console.print("[red]Error: Missing option '--vcf'[/red]")
+            raise typer.Exit(2)
+        if not bam:
+            console.print("[red]Error: Missing option '--bam'[/red]")
+            raise typer.Exit(2)
+
         # Get global options from context
         dry_run = ctx.parent.params.get("dry_run", False) if ctx.parent else False
 
