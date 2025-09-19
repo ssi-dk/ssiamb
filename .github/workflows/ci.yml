@@ -44,11 +44,6 @@ jobs:
       shell: bash -l {0}
       run: |
         pytest --cov=src/ssiamb --cov-report=term-missing tests/ -v
-        
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v4
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   docs:
     runs-on: ubuntu-latest

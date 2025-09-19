@@ -8,9 +8,10 @@ through mapping and variant calling approaches.
 
 from pathlib import Path
 from typing import Optional, Annotated
+import sys
+import os
 import typer
 from rich.console import Console
-import os
 
 from .version import __version__
 from .models import Mode, TSVMode, DepthTool
@@ -25,7 +26,9 @@ app = typer.Typer(
 )
 
 # Configure console for better test compatibility
-console = Console(force_terminal=not os.getenv("PYTEST_CURRENT_TEST"))
+console = Console(
+    force_terminal=not ("pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST"))
+)
 
 
 def version_callback(value: bool) -> None:
@@ -429,10 +432,12 @@ def ref(
         if not r2:
             console.print("[red]Error: Missing option '--r2'[/red]")
             raise typer.Exit(2)
-        
+
         # At least one of reference, species, or bracken must be provided
         if not any([reference, species, bracken]):
-            console.print("[red]Error: Must provide one of --reference, --species, or --bracken[/red]")
+            console.print(
+                "[red]Error: Must provide one of --reference, --species, or --bracken[/red]"
+            )
             raise typer.Exit(2)
 
         # Validate emit flags with stdout
