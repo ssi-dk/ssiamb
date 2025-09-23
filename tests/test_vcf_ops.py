@@ -35,16 +35,16 @@ class TestVCFTools:
 
     def test_check_vcf_tools_available(self):
         """Test tool availability check when tools are available."""
-        with patch("shutil.which") as mock_which:
-            mock_which.return_value = "/usr/bin/tool"
+        with patch("src.ssiamb.vcf_ops.get_tool_path_optional") as mock_get_tool_path:
+            mock_get_tool_path.return_value = "/usr/bin/tool"
             assert check_vcf_tools() is True
             # Should check for bcftools, bgzip, tabix
-            assert mock_which.call_count == 3
+            assert mock_get_tool_path.call_count == 3
 
     def test_check_vcf_tools_missing(self):
         """Test tool availability check when tools are missing."""
-        with patch("shutil.which") as mock_which:
-            mock_which.return_value = None
+        with patch("src.ssiamb.vcf_ops.get_tool_path_optional") as mock_get_tool_path:
+            mock_get_tool_path.return_value = None
             assert check_vcf_tools() is False
 
 
@@ -319,14 +319,18 @@ class TestVCFNormalization:
 
             # Check first call (bcftools norm)
             norm_call = mock_run.call_args_list[0]
-            assert "bcftools" in norm_call[0][0]
+            assert (
+                "bcftools" in norm_call[0][0][0]
+            )  # Check that bcftools is in the command path
             assert "norm" in norm_call[0][0]
             assert "-f" in norm_call[0][0]
             assert "--atomize" in norm_call[0][0]
 
             # Check second call (tabix)
             tabix_call = mock_run.call_args_list[1]
-            assert "tabix" in tabix_call[0][0]
+            assert (
+                "tabix" in tabix_call[0][0][0]
+            )  # Check that tabix is in the command path
 
             # Check result path
             expected_path = tmpdir / "input.normalized.vcf.gz"
@@ -569,8 +573,15 @@ chr1	300	.	GTA	G	60	PASS	.	GT:DP:AD	0/1:30:15,15
 
             output_bed = tmpdir / "output.bed.gz"
 
-            # Mock bgzip and tabix commands
-            with patch("subprocess.run") as mock_subprocess:
+            # Mock bgzip and tabix commands and tool paths
+            with (
+                patch("subprocess.run") as mock_subprocess,
+                patch("src.ssiamb.vcf_ops.get_tool_path") as mock_get_tool_path,
+            ):
+
+                # Mock tool paths for bgzip and tabix
+                mock_get_tool_path.side_effect = lambda tool: f"/usr/bin/{tool}"
+
                 result_path = emit_bed(
                     normalized_vcf_path=test_vcf,
                     output_path=output_bed,
@@ -605,8 +616,15 @@ chr1	100	.	A	G	60	PASS	.	GT:DP:AD	0/1:50:30,20
 
             output_bed = tmpdir / "output.bed.gz"
 
-            # Mock bgzip and tabix subprocess calls
-            with patch("subprocess.run"):
+            # Mock bgzip and tabix subprocess calls and tool paths
+            with (
+                patch("subprocess.run"),
+                patch("src.ssiamb.vcf_ops.get_tool_path") as mock_get_tool_path,
+            ):
+
+                # Mock tool paths for bgzip and tabix
+                mock_get_tool_path.side_effect = lambda tool: f"/usr/bin/{tool}"
+
                 result_path = emit_bed(
                     normalized_vcf_path=test_vcf,
                     output_path=output_bed,
@@ -625,8 +643,8 @@ class TestEmitterIntegration:
     def test_emitter_tool_requirements(self):
         """Test that emitters require bgzip and tabix tools."""
         # This is covered by existing check_vcf_tools tests
-        with patch("shutil.which") as mock_which:
-            mock_which.return_value = None
+        with patch("src.ssiamb.vcf_ops.get_tool_path_optional") as mock_get_tool_path:
+            mock_get_tool_path.return_value = None
             assert check_vcf_tools() is False
 
     def test_emitter_file_extensions(self):
@@ -644,7 +662,14 @@ class TestEmitterIntegration:
                 )
 
             # Test VCF output path handling
-            with patch("subprocess.run"):
+            with (
+                patch("subprocess.run"),
+                patch("src.ssiamb.vcf_ops.get_tool_path") as mock_get_tool_path,
+            ):
+
+                # Mock tool paths for bgzip and tabix
+                mock_get_tool_path.side_effect = lambda tool: f"/usr/bin/{tool}"
+
                 # Test that .vcf.gz extension is added if missing
                 vcf_output = tmpdir / "output"
                 result = emit_vcf(

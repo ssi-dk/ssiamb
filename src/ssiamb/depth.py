@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import List, Set
 from dataclasses import dataclass
 
+from .tool_config import get_tool_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,9 +67,10 @@ def check_mosdepth_available() -> bool:
         True if mosdepth is available, False otherwise
     """
     try:
-        subprocess.run(["mosdepth", "--version"], capture_output=True, check=True)
+        mosdepth_path = get_tool_path("mosdepth")
+        subprocess.run([mosdepth_path, "--version"], capture_output=True, check=True)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except Exception:
         return False
 
 
@@ -97,8 +100,9 @@ def run_mosdepth(
         raise DepthAnalysisError("mosdepth not found in PATH")
 
     # Construct mosdepth command
+    mosdepth_path = get_tool_path("mosdepth")
     cmd = [
-        "mosdepth",
+        mosdepth_path,
         "--mapq",
         str(mapq_threshold),
         "--no-per-base",  # Skip per-base output for efficiency

@@ -8,8 +8,8 @@ mapping execution, and mapping rate calculation.
 import pytest
 import tempfile
 import subprocess
+from unittest.mock import patch, MagicMock
 from pathlib import Path
-from unittest.mock import patch
 
 from src.ssiamb.mapping import (
     check_external_tools,
@@ -60,16 +60,23 @@ class TestExternalToolDetection:
             ),
         ],
     )
-    @patch("src.ssiamb.mapping.shutil.which")
+    @patch("src.ssiamb.mapping.subprocess.run")
+    @patch("src.ssiamb.mapping.get_tool_path_optional")
     def test_check_external_tools(
-        self, mock_which, availability_scenario, expected_tools
+        self, mock_get_tool_path, mock_run, availability_scenario, expected_tools
     ):
         """Test tool detection across different availability scenarios."""
 
-        def mock_which_side_effect(tool):
+        def mock_get_tool_path_side_effect(tool):
             return availability_scenario.get(tool)
 
-        mock_which.side_effect = mock_which_side_effect
+        mock_get_tool_path.side_effect = mock_get_tool_path_side_effect
+
+        # Mock successful subprocess.run for version checks
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "version 1.0"
+        mock_run.return_value = mock_result
 
         tools = check_external_tools()
 
@@ -405,10 +412,10 @@ class TestMappingRate:
     """Test mapping rate calculation functionality."""
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_success(self, mock_which, mock_run):
+    @patch("src.ssiamb.mapping.get_tool_path")
+    def test_calculate_mapping_rate_success(self, mock_get_tool_path, mock_run):
         """Test successful mapping rate calculation."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
 
         # Mock samtools stats output with correct format
         mock_run.return_value.returncode = 0
@@ -427,10 +434,10 @@ SN	reads unmapped:	150
             mock_run.assert_called_once()
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_zero_reads(self, mock_which, mock_run):
+    @patch("src.ssiamb.mapping.get_tool_path")
+    def test_calculate_mapping_rate_zero_reads(self, mock_get_tool_path, mock_run):
         """Test mapping rate calculation with zero reads."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
 
         # Mock samtools stats output with zero reads
         mock_run.return_value.returncode = 0
@@ -448,10 +455,10 @@ SN	reads unmapped:	0
             assert mapping_rate == 0.0
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_samtools_error(self, mock_which, mock_run):
+    @patch("src.ssiamb.mapping.get_tool_path")
+    def test_calculate_mapping_rate_samtools_error(self, mock_get_tool_path, mock_run):
         """Test mapping rate calculation when samtools fails."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
         # Mock subprocess.CalledProcessError for non-zero return code
         mock_run.side_effect = subprocess.CalledProcessError(
             1, ["samtools", "stats"], stderr="samtools: error reading file"
@@ -490,7 +497,7 @@ class TestMappingErrorHandling:
                 "samtools_missing",
                 {
                     "which_return": None,
-                    "setup_patches": ["src.ssiamb.mapping.shutil.which"],
+                    "setup_patches": ["src.ssiamb.mapping.get_tool_path"],
                 },
                 ExternalToolError,
                 "samtools not found",
@@ -501,7 +508,7 @@ class TestMappingErrorHandling:
                 {
                     "which_return": "/usr/bin/samtools",
                     "bam_path": "/non/existent/file.bam",
-                    "setup_patches": ["src.ssiamb.mapping.shutil.which"],
+                    "setup_patches": ["src.ssiamb.mapping.get_tool_path"],
                 },
                 MappingError,
                 "BAM file not found",
@@ -509,10 +516,10 @@ class TestMappingErrorHandling:
         ],
     )
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
+    @patch("src.ssiamb.mapping.get_tool_path")
     def test_function_error_scenarios(
         self,
-        mock_which,
+        mock_get_tool_path,
         mock_run,
         scenario,
         mock_setup,
@@ -521,7 +528,13 @@ class TestMappingErrorHandling:
     ):
         """Test error scenarios across different mapping functions."""
         # Setup mocks based on scenario
-        mock_which.return_value = mock_setup.get("which_return")
+        which_return = mock_setup.get("which_return")
+        if which_return is None:
+            from src.ssiamb.tool_config import ToolConfigError
+
+            mock_get_tool_path.side_effect = ToolConfigError("Tool not found")
+        else:
+            mock_get_tool_path.return_value = which_return
 
         # Test the appropriate function based on scenario
         bam_path = Path(mock_setup.get("bam_path", "/tmp/test.bam"))
@@ -530,10 +543,10 @@ class TestMappingErrorHandling:
             calculate_mapping_rate(bam_path)
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_subprocess_failure_error(self, mock_which, mock_run):
+    @patch("src.ssiamb.mapping.get_tool_path")
+    def test_subprocess_failure_error(self, mock_get_tool_path, mock_run):
         """Test subprocess failure scenario separately with proper file setup."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
         mock_run.side_effect = subprocess.CalledProcessError(1, "samtools")
 
         # Create a temporary BAM file for this test

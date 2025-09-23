@@ -18,6 +18,7 @@ from .version import __version__
 from .models import Mode, TSVMode, DepthTool
 from .runner import create_run_plan, execute_plan, run_summarize
 from .errors import handle_exception_with_exit
+from .tool_config import config as tool_config, check_required_tools_for_mode
 
 app = typer.Typer(
     name="ssiamb",
@@ -333,6 +334,9 @@ def self(
     where the assembly may not represent the true sequence.
     """
     try:
+        # Check required tools are available
+        check_required_tools_for_mode("self")
+
         # Validate required parameters
         if not r1:
             console.print("[red]Error: Missing option '--r1'[/red]")
@@ -559,6 +563,9 @@ def ref(
     Reference can be provided directly, looked up by species, or selected from Bracken.
     """
     try:
+        # Check required tools are available
+        check_required_tools_for_mode("ref")
+
         # Validate required parameters
         if not r1:
             console.print("[red]Error: Missing option '--r1'[/red]")
@@ -745,6 +752,9 @@ def summarize(
     ambiguous site statistics.
     """
     try:
+        # Check required tools are available
+        check_required_tools_for_mode("summarize")
+
         # Validate required parameters
         if not vcf:
             console.print("[red]Error: Missing option '--vcf'[/red]")
@@ -981,6 +991,165 @@ def download(
 
     except Exception as e:
         handle_exception_with_exit(e, "Panel download failed")
+
+
+# Create config subcommand group
+config_app = typer.Typer(
+    name="config",
+    help="Manage bioinformatics tool configuration",
+    no_args_is_help=True,
+)
+
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("show")
+def config_show() -> None:
+    """Show current tool configuration."""
+    try:
+        config = tool_config
+        config.print_config_table()
+    except Exception as e:
+        handle_exception_with_exit(e, "Failed to show configuration")
+
+
+@config_app.command("check")
+def config_check(
+    mode: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Check tools for specific mode (self, ref, summarize). If not specified, checks all tools."
+        ),
+    ] = None,
+) -> None:
+    """Check availability of configured tools."""
+    try:
+        config = tool_config
+
+        if mode:
+            if mode not in ["self", "ref", "summarize"]:
+                console.print(
+                    "[red]Error:[/red] Mode must be one of: self, ref, summarize"
+                )
+                raise typer.Exit(1)
+
+            tool_status = config.check_all_tools(required_for=mode)
+            console.print(f"\n[bold]Checking tools for '{mode}' mode:[/bold]")
+        else:
+            tool_status = config.check_all_tools()
+            console.print("\n[bold]Checking all tools:[/bold]")
+
+        all_available = True
+        for tool_name, (available, path, status) in tool_status.items():
+            status_icon = "✓" if available else "✗"
+            status_color = "green" if available else "red"
+            console.print(
+                f"  [{status_color}]{status_icon}[/{status_color}] {tool_name}: {status}"
+            )
+
+            if not available:
+                all_available = False
+
+        if not all_available:
+            console.print("\n[yellow]Some tools are missing.[/yellow]")
+            if mode:
+                missing_message = config.get_missing_tools_message(mode)
+                console.print(f"\n{missing_message}")
+            else:
+                console.print(
+                    "Use 'ssiamb config check <mode>' for mode-specific help."
+                )
+            raise typer.Exit(1)
+        else:
+            console.print("\n[green]All tools are available![/green]")
+
+    except Exception as e:
+        handle_exception_with_exit(e, "Failed to check tool configuration")
+
+
+@config_app.command("set")
+def config_set(
+    tool_name: Annotated[str, typer.Argument(help="Name of the tool to configure")],
+    tool_path: Annotated[str, typer.Argument(help="Path to the tool executable")],
+) -> None:
+    """Set the path for a specific tool."""
+    try:
+        config = tool_config
+        config.set_tool_path(tool_name, tool_path)
+        console.print(f"[green]Successfully configured {tool_name}[/green]")
+
+        # Verify the tool works
+        available, path, status = config.check_tool_availability(tool_name)
+        if available:
+            console.print(f"[green]✓[/green] Tool verification: {status}")
+        else:
+            console.print(
+                "[yellow]⚠[/yellow] Warning: Tool may not be working correctly"
+            )
+
+    except Exception as e:
+        handle_exception_with_exit(e, f"Failed to set tool path for {tool_name}")
+
+
+@config_app.command("reset")
+def config_reset(
+    tool_name: Annotated[
+        Optional[str],
+        typer.Argument(
+            help="Name of the tool to reset (if not specified, resets all tools)"
+        ),
+    ] = None,
+) -> None:
+    """Reset tool configuration to auto-detection."""
+    try:
+        config = tool_config
+        config.reset_tool_config(tool_name)
+
+        if tool_name:
+            console.print(f"[green]Reset {tool_name} to auto-detection[/green]")
+        else:
+            console.print("[green]Reset all tools to auto-detection[/green]")
+
+        console.print("\nCurrent status after reset:")
+        if tool_name:
+            available, path, status = config.check_tool_availability(tool_name)
+            status_icon = "✓" if available else "✗"
+            status_color = "green" if available else "red"
+            console.print(
+                f"  [{status_color}]{status_icon}[/{status_color}] {tool_name}: {status}"
+            )
+        else:
+            config.print_config_table()
+
+    except Exception as e:
+        handle_exception_with_exit(e, "Failed to reset tool configuration")
+
+
+@config_app.command("list")
+def config_list() -> None:
+    """List all available tools and their requirements."""
+    try:
+        config = tool_config
+
+        console.print("[bold]Available tools:[/bold]\n")
+
+        for tool_name, tool_info in config.DEFAULT_TOOLS.items():
+            required_for = ", ".join(tool_info["required_for"])
+            conda_package = tool_info["conda_package"]
+            console.print(f"  [cyan]{tool_name}[/cyan]")
+            console.print(f"    Required for: {required_for}")
+            console.print(f"    Conda package: {conda_package}")
+            console.print()
+
+        console.print(
+            "[dim]Use 'ssiamb config set <tool> <path>' to configure custom paths[/dim]"
+        )
+        console.print(
+            "[dim]Use 'ssiamb config check' to verify tool availability[/dim]"
+        )
+
+    except Exception as e:
+        handle_exception_with_exit(e, "Failed to list tools")
 
 
 if __name__ == "__main__":

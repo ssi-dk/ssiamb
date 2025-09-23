@@ -274,11 +274,11 @@ class TestDuplicateDetection:
 class TestMarkdupFunctionality:
     """Test samtools markdup functionality."""
 
-    @patch("shutil.which")
+    @patch("src.ssiamb.reuse.get_tool_path_optional")
     @patch("subprocess.run")
-    def test_run_markdup_for_depth_success(self, mock_run, mock_which):
+    def test_run_markdup_for_depth_success(self, mock_run, mock_get_tool_path):
         """Test successful markdup operation."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
         mock_run.return_value = MagicMock(returncode=0)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -294,10 +294,10 @@ class TestMarkdupFunctionality:
                 mock_run.call_count == 5
             )  # queryname sort + fixmate + coord sort + markdup + index
 
-    @patch("shutil.which")
-    def test_run_markdup_for_depth_missing_samtools(self, mock_which):
+    @patch("src.ssiamb.reuse.get_tool_path_optional")
+    def test_run_markdup_for_depth_missing_samtools(self, mock_get_tool_path):
         """Test markdup failure when samtools is missing."""
-        mock_which.return_value = None
+        mock_get_tool_path.return_value = None
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -306,11 +306,11 @@ class TestMarkdupFunctionality:
             with pytest.raises(CompatibilityError, match="samtools not found"):
                 run_markdup_for_depth(input_bam, tmpdir)
 
-    @patch("shutil.which")
+    @patch("src.ssiamb.reuse.get_tool_path_optional")
     @patch("subprocess.run")
-    def test_run_markdup_for_depth_command_failure(self, mock_run, mock_which):
+    def test_run_markdup_for_depth_command_failure(self, mock_run, mock_get_tool_path):
         """Test markdup failure when samtools command fails."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
         mock_run.side_effect = subprocess.CalledProcessError(
             1, "samtools", stderr="Error"
         )

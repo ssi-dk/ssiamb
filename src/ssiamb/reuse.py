@@ -10,11 +10,12 @@ This module provides functionality for:
 
 import logging
 import subprocess
-import shutil
 from pathlib import Path
 from typing import Dict, Set, Optional
 from dataclasses import dataclass
 import pysam
+
+from .tool_config import get_tool_path, get_tool_path_optional
 
 logger = logging.getLogger(__name__)
 
@@ -339,18 +340,21 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
     Raises:
         CompatibilityError: If samtools markdup fails
     """
-    if not shutil.which("samtools"):
+    if not get_tool_path_optional("samtools"):
         raise CompatibilityError("samtools not found in PATH")
 
     # Create temporary output path
     temp_bam = output_dir / f"{bam_path.stem}.markdup.bam"
 
     try:
+        # Get samtools path
+        samtools_path = get_tool_path("samtools")
+
         # First sort by queryname for markdup
         queryname_bam = output_dir / f"{bam_path.stem}.queryname.bam"
 
         sort_cmd = [
-            "samtools",
+            samtools_path,
             "sort",
             "-n",  # Sort by queryname
             "-o",
@@ -366,7 +370,7 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
         fixmate_bam = output_dir / f"{bam_path.stem}.fixmate.bam"
 
         fixmate_cmd = [
-            "samtools",
+            samtools_path,
             "fixmate",
             "-m",  # Add mate score tags
             str(queryname_bam),
@@ -381,7 +385,7 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
         coord_sorted_bam = output_dir / f"{bam_path.stem}.coord_sorted.bam"
 
         coord_sort_cmd = [
-            "samtools",
+            samtools_path,
             "sort",
             "-o",
             str(coord_sorted_bam),
@@ -393,7 +397,7 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
         subprocess.run(coord_sort_cmd, capture_output=True, text=True, check=True)
 
         # Finally run samtools markdup on the coordinate-sorted fixmate output
-        cmd = ["samtools", "markdup", str(coord_sorted_bam), str(temp_bam)]
+        cmd = [samtools_path, "markdup", str(coord_sorted_bam), str(temp_bam)]
 
         logger.info(f"Running samtools markdup: {coord_sorted_bam} -> {temp_bam}")
 
@@ -407,7 +411,7 @@ def run_markdup_for_depth(bam_path: Path, output_dir: Path) -> Path:
                 temp_file.unlink()
 
         # Index the marked BAM file
-        index_cmd = ["samtools", "index", str(temp_bam)]
+        index_cmd = [samtools_path, "index", str(temp_bam)]
         subprocess.run(index_cmd, capture_output=True, text=True, check=True)
 
         return temp_bam

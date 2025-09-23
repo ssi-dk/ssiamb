@@ -7,7 +7,6 @@ variant classification, and grid-based counting for ambiguous sites.
 
 import logging
 import subprocess
-import shutil
 import warnings
 from pathlib import Path
 from typing import Optional, List, Tuple, Iterator, Set, Any
@@ -16,6 +15,8 @@ from enum import Enum
 
 import pysam
 import numpy as np
+
+from .tool_config import get_tool_path, get_tool_path_optional
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def check_vcf_tools() -> bool:
         True if all required tools are available, False otherwise
     """
     required_tools = ["bcftools", "bgzip", "tabix"]
-    return all(shutil.which(tool) is not None for tool in required_tools)
+    return all(get_tool_path_optional(tool) is not None for tool in required_tools)
 
 
 def normalize_and_split(
@@ -113,8 +114,9 @@ def normalize_and_split(
 
     try:
         # Build bcftools norm command
+        bcftools_path = get_tool_path("bcftools")
         cmd = [
-            "bcftools",
+            bcftools_path,
             "norm",
             "-f",
             str(reference),
@@ -139,7 +141,8 @@ def normalize_and_split(
             logger.debug(f"bcftools norm stderr: {result.stderr}")
 
         # Index the compressed VCF
-        tabix_cmd = ["tabix", "-p", "vcf", str(normalized_vcf)]
+        tabix_path = get_tool_path("tabix")
+        tabix_cmd = [tabix_path, "-p", "vcf", str(normalized_vcf)]
         logger.debug(f"Indexing VCF: {' '.join(tabix_cmd)}")
 
         subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
@@ -672,7 +675,8 @@ def emit_vcf(
                             records_written += 1
 
         # Index the compressed VCF
-        tabix_cmd = ["tabix", "-p", "vcf", str(output_path)]
+        tabix_path = get_tool_path("tabix")
+        tabix_cmd = [tabix_path, "-p", "vcf", str(output_path)]
         subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
 
         logger.info(
@@ -828,7 +832,8 @@ def emit_bed(
                 f.write("\t".join(bed_record) + "\n")
 
         # Compress with bgzip
-        bgzip_cmd = ["bgzip", "-c", str(temp_bed)]
+        bgzip_path = get_tool_path("bgzip")
+        bgzip_cmd = [bgzip_path, "-c", str(temp_bed)]
         with open(output_path, "w") as f:
             subprocess.run(bgzip_cmd, stdout=f, check=True)
 
@@ -836,7 +841,8 @@ def emit_bed(
         temp_bed.unlink()
 
         # Index with tabix
-        tabix_cmd = ["tabix", "-p", "bed", str(output_path)]
+        tabix_path = get_tool_path("tabix")
+        tabix_cmd = [tabix_path, "-p", "bed", str(output_path)]
         subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
 
         logger.info(

@@ -21,37 +21,37 @@ from src.ssiamb.models import Caller
 class TestCallerToolChecks:
     """Test tool availability checking."""
 
-    @patch("src.ssiamb.calling.shutil.which")
-    def test_bbtools_tools_available(self, mock_which):
+    @patch("src.ssiamb.calling.get_tool_path_optional")
+    def test_bbtools_tools_available(self, mock_get_tool_path):
         """Test BBTools tool availability check when tools are present."""
-        mock_which.side_effect = lambda tool: (
+        mock_get_tool_path.side_effect = lambda tool: (
             f"/usr/bin/{tool}" if tool in ["pileup.sh", "callvariants.sh"] else None
         )
 
         assert check_caller_tools(Caller.BBTOOLS) is True
-        assert mock_which.call_count == 2
+        assert mock_get_tool_path.call_count == 2
 
-    @patch("src.ssiamb.calling.shutil.which")
-    def test_bbtools_tools_missing(self, mock_which):
+    @patch("src.ssiamb.calling.get_tool_path_optional")
+    def test_bbtools_tools_missing(self, mock_get_tool_path):
         """Test BBTools tool availability check when tools are missing."""
-        mock_which.return_value = None
+        mock_get_tool_path.return_value = None
 
         assert check_caller_tools(Caller.BBTOOLS) is False
 
-    @patch("src.ssiamb.calling.shutil.which")
-    def test_bcftools_available(self, mock_which):
+    @patch("src.ssiamb.calling.get_tool_path_optional")
+    def test_bcftools_available(self, mock_get_tool_path):
         """Test bcftools tool availability check when tool is present."""
-        mock_which.side_effect = lambda tool: (
+        mock_get_tool_path.side_effect = lambda tool: (
             "/usr/bin/bcftools" if tool == "bcftools" else None
         )
 
         assert check_caller_tools(Caller.BCFTOOLS) is True
-        mock_which.assert_called_once_with("bcftools")
+        mock_get_tool_path.assert_called_once_with("bcftools")
 
-    @patch("src.ssiamb.calling.shutil.which")
-    def test_bcftools_missing(self, mock_which):
+    @patch("src.ssiamb.calling.get_tool_path_optional")
+    def test_bcftools_missing(self, mock_get_tool_path):
         """Test bcftools tool availability check when tool is missing."""
-        mock_which.return_value = None
+        mock_get_tool_path.return_value = None
 
         assert check_caller_tools(Caller.BCFTOOLS) is False
 

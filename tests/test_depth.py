@@ -135,7 +135,9 @@ class TestRunMosdepth:
 
             # Check command construction
             call_args = mock_run.call_args[0][0]
-            assert call_args[0] == "mosdepth"
+            assert (
+                "mosdepth" in call_args[0]
+            )  # Check that mosdepth is in the command path
             assert "--mapq" in call_args
             assert "--no-per-base" in call_args
 

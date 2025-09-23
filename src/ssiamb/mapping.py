@@ -11,9 +11,9 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-import shutil
 
 from .models import Mapper
+from .tool_config import get_tool_path, get_tool_path_optional
 
 
 logger = logging.getLogger(__name__)
@@ -59,16 +59,18 @@ def check_external_tools() -> Dict[str, Dict[str, Any]]:
     for tool, version_cmd in tool_commands.items():
         tools[tool] = {"available": False, "version": "unknown"}
 
-        # Check if tool is in PATH
-        if shutil.which(tool) is None:
-            tools[tool]["version"] = "not found in PATH"
+        # Check if tool is available (configured path or PATH)
+        tool_path = get_tool_path_optional(tool)
+        if tool_path is None:
+            tools[tool]["version"] = "not found in PATH or configuration"
             logger.debug(f"Tool {tool}: not found")
             continue
 
-        # Try to get version
+        # Try to get version using configured or detected path
         try:
+            cmd = [tool_path] + version_cmd[1:]  # Replace tool name with full path
             result = subprocess.run(
-                version_cmd,
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=5,  # Prevent hanging
@@ -157,7 +159,8 @@ def index_bam(bam_path: Path) -> None:
     logger.debug(f"Indexing BAM file: {bam_path}")
 
     try:
-        cmd = ["samtools", "index", str(bam_path)]
+        samtools_path = get_tool_path("samtools")
+        cmd = [samtools_path, "index", str(bam_path)]
         subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         if not index_path.exists():
@@ -241,7 +244,8 @@ def _build_minimap2_index(fasta_path: Path) -> None:
 
 def _build_bwa_mem2_index(fasta_path: Path) -> None:
     """Build bwa-mem2 index files."""
-    cmd = ["bwa-mem2", "index", str(fasta_path)]
+    bwa_mem2_path = get_tool_path("bwa-mem2")
+    cmd = [bwa_mem2_path, "index", str(fasta_path)]
 
     logger.debug(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -377,8 +381,9 @@ def _map_with_minimap2(
         str(r2_path),  # R2 FASTQ
     ]
 
+    samtools_path = get_tool_path("samtools")
     samtools_cmd = [
-        "samtools",
+        samtools_path,
         "sort",
         "-@",
         str(threads),  # Threads
@@ -430,8 +435,9 @@ def _map_with_bwa_mem2(
     read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:ILLUMINA"
 
     # bwa-mem2 command: map to SAM, pipe to samtools for sorting
+    bwa_mem2_path = get_tool_path("bwa-mem2")
     bwa_cmd = [
-        "bwa-mem2",
+        bwa_mem2_path,
         "mem",
         "-t",
         str(threads),  # Threads
@@ -442,8 +448,9 @@ def _map_with_bwa_mem2(
         str(r2_path),  # R2 FASTQ
     ]
 
+    samtools_path = get_tool_path("samtools")
     samtools_cmd = [
-        "samtools",
+        samtools_path,
         "sort",
         "-@",
         str(threads),  # Threads
@@ -496,8 +503,10 @@ def calculate_mapping_rate(bam_path: Path) -> float:
         MappingError: If BAM file doesn't exist or samtools fails
         ExternalToolError: If samtools is not available
     """
-    if not shutil.which("samtools"):
-        raise ExternalToolError("samtools not found in PATH")
+    try:
+        samtools_path = get_tool_path("samtools")
+    except Exception:
+        raise ExternalToolError("samtools not found in PATH or configuration")
 
     if not bam_path.exists():
         raise MappingError(f"BAM file not found: {bam_path}")
@@ -506,7 +515,7 @@ def calculate_mapping_rate(bam_path: Path) -> float:
 
     try:
         # Run samtools stats to get read counts
-        cmd = ["samtools", "stats", str(bam_path)]
+        cmd = [samtools_path, "stats", str(bam_path)]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         total_reads = 0

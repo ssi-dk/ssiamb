@@ -13,6 +13,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
 
 from .models import Caller
+from .tool_config import get_tool_path, get_tool_path_optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +55,14 @@ def check_caller_tools_detailed(caller: Caller) -> Dict[str, Dict[str, Any]]:
         for tool in ["pileup.sh", "callvariants.sh"]:
             tools[tool] = {"available": False, "version": "unknown"}
 
-            if shutil.which(tool) is None:
+            tool_path = get_tool_path_optional(tool)
+            if tool_path:
+                tools[tool]["available"] = True
+                tools[tool]["version"] = "BBTools (version check not supported)"
+                logger.debug(f"Tool {tool}: found")
+            else:
                 tools[tool]["version"] = "not found in PATH"
                 logger.debug(f"Tool {tool}: not found")
-                continue
-
-            # BBTools scripts typically don't have version commands, so just mark as available
-            tools[tool]["available"] = True
-            tools[tool]["version"] = "BBTools (version check not supported)"
             logger.debug(f"Tool {tool}: available")
 
     elif caller == Caller.BCFTOOLS:
@@ -117,12 +118,12 @@ def check_caller_tools(caller: Caller) -> bool:
     if caller == Caller.BBTOOLS:
         # Check for BBTools executables
         return (
-            shutil.which("pileup.sh") is not None
-            and shutil.which("callvariants.sh") is not None
+            get_tool_path_optional("pileup.sh") is not None
+            and get_tool_path_optional("callvariants.sh") is not None
         )
     elif caller == Caller.BCFTOOLS:
         # Check for bcftools
-        return shutil.which("bcftools") is not None
+        return get_tool_path_optional("bcftools") is not None
     else:
         raise ValueError(f"Unknown caller: {caller}")
 
@@ -181,8 +182,9 @@ def run_bbtools_calling(
         output_vcf.parent.mkdir(parents=True, exist_ok=True)
 
         # Run callvariants.sh directly with BAM input (simpler approach)
+        callvariants_path = get_tool_path("callvariants.sh")
         callvariants_cmd = [
-            "callvariants.sh",
+            callvariants_path,
             f"in={bam_path}",
             f"ref={reference_path}",
             f"vcf={output_vcf}",  # Use vcf= for VCF output

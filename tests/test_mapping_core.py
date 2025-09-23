@@ -97,10 +97,10 @@ class TestMappingRate:
     """Test mapping rate calculation functionality."""
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_success(self, mock_which, mock_run):
+    @patch("src.ssiamb.mapping.get_tool_path")
+    def test_calculate_mapping_rate_success(self, mock_get_tool_path, mock_run):
         """Test successful mapping rate calculation."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
 
         # Mock samtools stats output with correct format
         mock_run.return_value.returncode = 0
@@ -119,10 +119,10 @@ SN	reads unmapped:	150
             mock_run.assert_called_once()
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_zero_reads(self, mock_which, mock_run):
+    @patch("src.ssiamb.mapping.get_tool_path")
+    def test_calculate_mapping_rate_zero_reads(self, mock_get_tool_path, mock_run):
         """Test mapping rate calculation with zero reads."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
 
         # Mock samtools stats output with zero reads
         mock_run.return_value.returncode = 0
@@ -140,10 +140,10 @@ SN	reads unmapped:	0
             assert mapping_rate == 0.0
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_samtools_error(self, mock_which, mock_run):
+    @patch("src.ssiamb.tool_config.get_tool_path")
+    def test_calculate_mapping_rate_samtools_error(self, mock_get_tool_path, mock_run):
         """Test mapping rate calculation when samtools fails."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
         # Mock subprocess.CalledProcessError for non-zero return code
         mock_run.side_effect = subprocess.CalledProcessError(
             1, ["samtools", "stats"], stderr="samtools: error reading file"
@@ -209,10 +209,10 @@ class TestMappingUtilities:
     """Test utility functions for mapping operations."""
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_complex_output(self, mock_which, mock_run):
+    @patch("src.ssiamb.tool_config.get_tool_path")
+    def test_calculate_mapping_rate_complex_output(self, mock_get_tool_path, mock_run):
         """Test mapping rate calculation with complex samtools output."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
 
         # Mock realistic samtools stats output
         mock_run.return_value.returncode = 0
@@ -268,10 +268,12 @@ SN	percentage of properly paired reads (%):	88.0
             mock_run.assert_called_once()
 
     @patch("src.ssiamb.mapping.subprocess.run")
-    @patch("src.ssiamb.mapping.shutil.which")
-    def test_calculate_mapping_rate_malformed_output(self, mock_which, mock_run):
+    @patch("src.ssiamb.tool_config.get_tool_path")
+    def test_calculate_mapping_rate_malformed_output(
+        self, mock_get_tool_path, mock_run
+    ):
         """Test mapping rate calculation with malformed samtools output."""
-        mock_which.return_value = "/usr/bin/samtools"
+        mock_get_tool_path.return_value = "/usr/bin/samtools"
 
         # Mock malformed output (missing expected fields)
         mock_run.return_value.returncode = 0
