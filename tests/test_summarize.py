@@ -10,12 +10,19 @@ Tests the run_summarize function and summarize CLI command to ensure:
 """
 
 import pytest
+import re
 import tempfile
 from pathlib import Path
 from typer.testing import CliRunner
 
 from ssiamb.cli import app
 from ssiamb.runner import run_summarize
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape sequences from text for consistent testing."""
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    return ansi_escape.sub('', text)
 
 
 class TestSummarizeFunction:
@@ -136,12 +143,12 @@ class TestSummarizeCLI:
         # Test missing VCF
         result = runner.invoke(app, ["summarize", "--bam", "test.bam"])
         assert result.exit_code != 0
-        assert "Missing option '--vcf'" in result.output
+        assert "Missing option '--vcf'" in strip_ansi_codes(result.output)
 
         # Test missing BAM
         result = runner.invoke(app, ["summarize", "--vcf", "test.vcf"])
         assert result.exit_code != 0
-        assert "Missing option '--bam'" in result.output
+        assert "Missing option '--bam'" in strip_ansi_codes(result.output)
 
     def test_summarize_validates_file_existence(self):
         """Test that CLI validates file existence with proper error codes."""
