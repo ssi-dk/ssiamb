@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -42,6 +42,7 @@ jobs:
       shell: bash -l {0}
       run: |
         pip install -e .
+        pip install types-requests
         
     - name: Lint with ruff
       shell: bash -l {0}
@@ -54,6 +55,11 @@ jobs:
       shell: bash -l {0}
       run: |
         pytest --cov=src/ssiamb --cov-report=term-missing tests/ -v
+        
+    - name: Run smoke test
+      shell: bash -l {0}
+      run: |
+        python smoke_test.py
 
   docs:
     runs-on: ubuntu-latest

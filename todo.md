@@ -263,32 +263,32 @@ Legend:
 ---
 
 ## 26) Admin Reference Helper (optional for CLI users)
-- [ ] Implement `ssiamb panel download species.txt --out refs/` (writes in‑package `refs/` by default; fail if not writable).
-- [ ] Download **best RefSeq** per policy in spec; write both **minimap2** and **bwa‑mem2** indexes.
-- [ ] **Acceptance:** Downloaded files exist; names `Genus_species.fna` + indexes.
+- [x] Implement `ssiamb panel download species.txt --out refs/` (writes in‑package `refs/` by default; fail if not writable).
+- [x] Download **best RefSeq** per policy in spec; write both **minimap2** and **bwa‑mem2** indexes.
+- [x] **Acceptance:** Downloaded files exist; names `Genus_species.fna` + indexes.
 
 ---
 
 ## 27) Minimal Tests & Smoke
-- [ ] Unit tests for pure logic:
-  - [ ] Species normalization & aliasing
-  - [ ] Bracken selection tie‑breaks
-  - | [ ] Grid binning & dp_cap clipping
-  - [ ] TSV writer header behavior
-  - [ ] VCF MAF precedence logic
-- [ ] `scripts/dev_smoke.sh` for local quick checks (`--help`, no-op run to placeholder TSV).
-- [ ] **Acceptance:** `pytest -q` passes pure tests; smoke script OK.
+- [x] Unit tests for pure logic:
+  - [x] Species normalization & aliasing
+  - [x] Bracken selection tie‑breaks
+  - [x] Grid binning & dp_cap clipping
+  - [x] TSV writer header behavior
+  - [x] VCF MAF precedence logic
+- [x] `scripts/dev_smoke.sh` for local quick checks (`--help`, no-op run to placeholder TSV).
+- [x] **Acceptance:** `pytest -q` passes pure tests; smoke script OK.
 
 ---
 
 ## 28) Documentation (Minimal)
-- [ ] Update README with:
-  - [ ] Install from PyPI/Conda
-  - [ ] Admin ref dir setup & `$SSIAMB_REF_DIR`
-  - [ ] Quick examples for `self`, `ref`, `summarize`
-  - [ ] Output overview & flags
-  - [ ] Error codes table
-- [ ] **Acceptance:** Docs reflect current CLI/behavior.
+- [x] Update README with:
+  - [x] Install from PyPI/Conda
+  - [x] Admin ref dir setup & `$SSIAMB_REF_DIR`
+  - [x] Quick examples for `self`, `ref`, `summarize`
+  - [x] Output overview & flags
+  - [x] Error codes table
+- [x] **Acceptance:** Docs reflect current CLI/behavior.
 
 ---
 
@@ -302,8 +302,30 @@ Legend:
 ---
 
 ## Definition of Done (DoD)
-- [ ] `ssiamb self/ref/summarize` run end‑to‑end with real tools where available.
-- [ ] `ambiguous_summary.tsv` populated correctly; optional outputs emitted only on flags.
-- [ ] `--dry-run` & `--stdout` behave as specified.
-- [ ] Exit codes and error messages match spec.
+- [x] `ssiamb self/ref/summarize` run end‑to‑end with real tools where available.
+- [x] `ambiguous_summary.tsv` populated correctly; optional outputs emitted only on flags.
+- [x] `--dry-run` & `--stdout` behave as specified.
+- [x] Exit codes and error messages match spec.
 - [ ] v1.0 published to **PyPI**, Bioconda PR opened, Galaxy ToolShed wrapper available.
+
+---
+
+## Project Status
+
+**ALL CORE MILESTONES COMPLETED (1-28)** ✅
+
+This project is now feature-complete and ready for release. All functionality specified in the requirements has been implemented, tested, and documented:
+
+- ✅ Complete CLI interface with `self`, `ref`, `summarize` modes
+- ✅ RefSeq downloader with admin reference management
+- ✅ Robust reference indexing (minimap2 & bwa-mem2)
+- ✅ Full variant calling and analysis pipeline
+- ✅ Comprehensive output formats (TSV, VCF, BED, Matrix, MultiQC)
+- ✅ Extensive unit and integration test coverage
+- ✅ Complete documentation and usage examples
+- ✅ Smoke testing and validation
+- ✅ Galaxy wrapper and tool configuration
+
+**Next Steps for Release:**
+
+- Milestone 29: Version bump to v1.0, PyPI publishing, Bioconda submission, Galaxy ToolShed deployment

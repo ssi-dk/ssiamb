@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, Annotated
 import sys
 import os
+import tempfile
 import typer
 from rich.console import Console
 
@@ -24,6 +25,112 @@ app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
 )
+
+
+def resolve_output_directory(
+    specified_dir: Optional[Path],
+    default_fallback: Optional[Path] = None,
+    command_name: str = "command",
+    dry_run: bool = False,
+) -> Path:
+    """
+    Resolve output directory with robust fallback logic.
+
+    Priority:
+    1. User-specified directory
+    2. Default fallback (if provided)
+    3. Current working directory
+    4. Temporary directory (if CWD not writable)
+
+    Args:
+        specified_dir: User-specified directory (can be None)
+        default_fallback: Preferred default directory (e.g., site-packages/ssiamb/refs)
+        command_name: Name of command for error messages
+        dry_run: If True, don't create directories or test writability
+
+    Returns:
+        Resolved Path object
+
+    Raises:
+        typer.Exit: If no writable directory can be found
+    """
+    console = Console()
+
+    # If user specified a directory, use it
+    if specified_dir is not None:
+        resolved = Path(specified_dir)
+        if not dry_run:
+            try:
+                resolved.mkdir(parents=True, exist_ok=True)
+                # Test writability
+                test_file = resolved / ".ssiamb_write_test"
+                test_file.touch()
+                test_file.unlink()
+            except (PermissionError, OSError) as e:
+                console.print(
+                    f"[red]Error: Cannot write to specified directory: {resolved}[/red]"
+                )
+                console.print(f"[red]Reason: {e}[/red]")
+                raise typer.Exit(1)
+        return resolved
+
+    # Try default fallback if provided
+    if default_fallback is not None:
+        if not dry_run:
+            try:
+                default_fallback.mkdir(parents=True, exist_ok=True)
+                # Test writability
+                test_file = default_fallback / ".ssiamb_write_test"
+                test_file.touch()
+                test_file.unlink()
+                console.print(f"Using default directory: {default_fallback}")
+                return default_fallback
+            except (PermissionError, OSError):
+                console.print(
+                    f"[yellow]Warning: Default directory not writable: {default_fallback}[/yellow]"
+                )
+        else:
+            console.print(f"Would use default directory: {default_fallback}")
+            return default_fallback
+
+    # Try current working directory
+    cwd = Path.cwd()
+    if not dry_run:
+        try:
+            # Test writability of current directory
+            test_file = cwd / ".ssiamb_write_test"
+            test_file.touch()
+            test_file.unlink()
+            console.print(f"Using current directory: {cwd}")
+            return cwd
+        except (PermissionError, OSError):
+            console.print(
+                f"[yellow]Warning: Current directory not writable: {cwd}[/yellow]"
+            )
+    else:
+        console.print(f"Would use current directory: {cwd}")
+        return cwd
+
+    # Final fallback: temporary directory
+    if not dry_run:
+        temp_dir = Path(tempfile.gettempdir()) / f"ssiamb_{command_name}"
+        try:
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            console.print(f"[yellow]Using temporary directory: {temp_dir}[/yellow]")
+            console.print(
+                "[yellow]Consider specifying a permanent location with --out[/yellow]"
+            )
+            return temp_dir
+        except (PermissionError, OSError):
+            console.print("[red]Error: No writable directory found[/red]")
+            console.print(
+                f"[red]Tried: specified={specified_dir}, default={default_fallback}, cwd={cwd}, temp={temp_dir}[/red]"
+            )
+            raise typer.Exit(1)
+    else:
+        temp_dir = Path(tempfile.gettempdir()) / f"ssiamb_{command_name}"
+        console.print(f"Would use temporary directory: {temp_dir}")
+        return temp_dir
 
 
 # Configure console for better test compatibility
@@ -296,7 +403,12 @@ def self(
         if emit_provenance and provenance_record:
             from .provenance import write_provenance_json
 
-            out_dir = output_dir or Path.cwd()
+            out_dir = resolve_output_directory(
+                specified_dir=output_dir,
+                default_fallback=None,
+                command_name="self_mapping",
+                dry_run=False,
+            )
             provenance_path = out_dir / "run_provenance.json"
             write_provenance_json([provenance_record], provenance_path)
             console.print(f"Provenance written to {provenance_path}")
@@ -535,7 +647,12 @@ def ref(
         if emit_provenance and provenance_record:
             from .provenance import write_provenance_json
 
-            out_dir = output_dir or Path.cwd()
+            out_dir = resolve_output_directory(
+                specified_dir=output_dir,
+                default_fallback=None,
+                command_name="ref_mapping",
+                dry_run=False,
+            )
             provenance_path = out_dir / "run_provenance.json"
             write_provenance_json([provenance_record], provenance_path)
             console.print(f"Provenance written to {provenance_path}")
@@ -716,6 +833,154 @@ def summarize(
 
     except Exception as e:
         handle_exception_with_exit(e, "Summarize mode failed")
+
+
+# Panel command group for administrative tasks
+panel_app = typer.Typer(
+    name="panel",
+    help="Administrative panel commands for reference management",
+    no_args_is_help=True,
+)
+
+# Add panel command group to main app
+app.add_typer(panel_app)
+
+
+@panel_app.command()
+def download(
+    species_file: Annotated[
+        Path,
+        typer.Argument(
+            help="Text file containing species names (one per line, format: Genus_species)",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    out: Annotated[
+        Optional[Path],
+        typer.Option(
+            "--out",
+            help="Output directory for reference files (default: ssiamb/refs/ in site-packages, fallback: current directory)",
+        ),
+    ] = None,
+    indexes: Annotated[
+        bool,
+        typer.Option(
+            "--indexes/--no-indexes",
+            help="Generate minimap2 and bwa-mem2 indexes after download",
+        ),
+    ] = True,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Enable verbose output"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show what would be downloaded without executing"
+        ),
+    ] = False,
+) -> None:
+    """
+    Download reference genomes for specified species.
+
+    Downloads the best available RefSeq genome for each species listed in the input file.
+    Selection policy prioritizes: reference > representative > other RefSeq,
+    complete > chromosome > scaffold/contig, RefSeq over GenBank, newest version,
+    includes plasmids, and breaks ties by fewest contigs.
+
+    After successful downloads, automatically generates minimap2 and bwa-mem2 indexes
+    for each reference genome (can be disabled with --no-indexes).
+
+    The species file should contain one species per line in the format: Genus_species
+    """
+    try:
+        console.print("[bold blue]SSIAMB Panel Download[/bold blue]")
+
+        if dry_run:
+            console.print(
+                "[yellow]DRY RUN: Would download references but not executing[/yellow]"
+            )
+
+        # Read species from input file
+        with open(species_file, "r") as f:
+            species_list = [
+                line.strip() for line in f if line.strip() and not line.startswith("#")
+            ]
+
+        if not species_list:
+            console.print("[red]Error: No species found in input file[/red]")
+            raise typer.Exit(1)
+
+        console.print(f"Found {len(species_list)} species to process:")
+        for species in species_list:
+            console.print(f"  - {species}")
+
+        # Determine output directory with robust fallback
+        try:
+            import ssiamb
+
+            package_path = Path(ssiamb.__file__).parent
+            default_fallback = package_path / "refs"
+        except ImportError:
+            default_fallback = None
+
+        out = resolve_output_directory(
+            specified_dir=out,
+            default_fallback=default_fallback,
+            command_name="panel_download",
+            dry_run=dry_run,
+        )
+
+        console.print(f"Output directory: {out}")
+
+        # Import RefSeq downloader
+        from .refseq import RefSeqDownloader
+
+        # Initialize downloader
+        downloader = RefSeqDownloader(out, verbose=verbose, create_indexes=indexes)
+
+        successful_downloads = []
+        failed_downloads = []
+
+        # Download each species
+        for species in species_list:
+            try:
+                result = downloader.download_species(species, dry_run=dry_run)
+                if result:
+                    successful_downloads.append((species, result))
+                else:
+                    failed_downloads.append(species)
+            except Exception as e:
+                console.print(f"[red]Error processing {species}: {e}[/red]")
+                failed_downloads.append(species)
+
+        # Report results
+        if successful_downloads:
+            status = "Would download" if dry_run else "Successfully downloaded"
+            console.print(
+                f"\n[green]{status} {len(successful_downloads)} genomes:[/green]"
+            )
+            for species, file_path in successful_downloads:
+                console.print(f"  ✓ {species} → {file_path}")
+
+        if failed_downloads:
+            console.print(
+                f"\n[red]Failed to process {len(failed_downloads)} genomes:[/red]"
+            )
+            for species in failed_downloads:
+                console.print(f"  ✗ {species}")
+
+        if not successful_downloads:
+            console.print("[red]No genomes were successfully processed[/red]")
+            raise typer.Exit(1)
+
+        console.print("[green]Panel download command completed successfully[/green]")
+
+    except Exception as e:
+        handle_exception_with_exit(e, "Panel download failed")
 
 
 if __name__ == "__main__":

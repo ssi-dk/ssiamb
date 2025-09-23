@@ -25,6 +25,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
@@ -35,6 +36,7 @@ dependencies = [
     "numpy>=1.24.0",
     "pysam>=0.21.0",
     "biopython>=1.81",
+    "requests>=2.25.0",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +47,7 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.5.0",
     "types-PyYAML",
+    "types-requests",
     "pandas-stubs",
 ]
 

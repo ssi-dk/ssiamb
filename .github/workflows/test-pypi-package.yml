@@ -1,0 +1,44 @@
+name: Test PyPI Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allow manual triggering
+
+permissions:
+  contents: read
+
+jobs:
+  test-pypi-install:
+    name: Test PyPI package installation
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Wait for PyPI propagation
+      run: sleep 300  # Wait 5 minutes for PyPI to propagate
+      
+    - name: Install from PyPI
+      run: |
+        pip install --upgrade pip
+        pip install ssiamb
+        
+    - name: Test CLI accessibility
+      run: |
+        ssiamb --version
+        ssiamb --help
+        ssiamb self --help
+        ssiamb ref --help
+        ssiamb summarize --help
+        
+    - name: Test import
+      run: |
+        python -c "import ssiamb; print('Import successful')"
+        python -c "from ssiamb import cli; print('CLI import successful')"
