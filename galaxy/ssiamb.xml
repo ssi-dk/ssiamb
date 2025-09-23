@@ -2,7 +2,7 @@
     <description>Count ambiguous sites in bacterial WGS data</description>
     
     <macros>
-        <token name="@TOOL_VERSION@">1.0.0</token>
+        <token name="@TOOL_VERSION@">0.1.0</token>
         <token name="@VERSION_SUFFIX@">0</token>
     </macros>
     
