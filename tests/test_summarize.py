@@ -21,8 +21,8 @@ from ssiamb.runner import run_summarize
 
 def strip_ansi_codes(text: str) -> str:
     """Remove ANSI escape sequences from text for consistent testing."""
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
 
 
 class TestSummarizeFunction:
