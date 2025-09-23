@@ -302,7 +302,7 @@ class TestMappingExecution:
             fasta_path = Path(tmpdir) / "reference.fasta"
             r1_path = Path(tmpdir) / "R1.fastq"
             r2_path = Path(tmpdir) / "R2.fastq"
-            expected_bam = Path("test_sample.sorted.bam")
+            expected_bam = Path(tmpdir) / "test_sample.sorted.bam"
 
             fasta_path.write_text(">ref\nACGT\n")
             r1_path.write_text("@read1\nACGT\n+\nIIII\n")
@@ -315,7 +315,12 @@ class TestMappingExecution:
             mock_map.side_effect = create_bam_file
 
             result = map_fastqs(
-                Mapper.MINIMAP2, fasta_path, r1_path, r2_path, "test_sample"
+                Mapper.MINIMAP2,
+                fasta_path,
+                r1_path,
+                r2_path,
+                "test_sample",
+                output_path=expected_bam,
             )
 
             assert result == expected_bam
@@ -342,7 +347,7 @@ class TestMappingExecution:
             fasta_path = Path(tmpdir) / "reference.fasta"
             r1_path = Path(tmpdir) / "R1.fastq"
             r2_path = Path(tmpdir) / "R2.fastq"
-            expected_bam = Path("test_sample.sorted.bam")
+            expected_bam = Path(tmpdir) / "test_sample.sorted.bam"
 
             fasta_path.write_text(">ref\nACGT\n")
             r1_path.write_text("@read1\nACGT\n+\nIIII\n")
@@ -355,7 +360,12 @@ class TestMappingExecution:
             mock_map.side_effect = create_bam_file
 
             result = map_fastqs(
-                Mapper.BWA_MEM2, fasta_path, r1_path, r2_path, "test_sample"
+                Mapper.BWA_MEM2,
+                fasta_path,
+                r1_path,
+                r2_path,
+                "test_sample",
+                output_path=expected_bam,
             )
 
             assert result == expected_bam

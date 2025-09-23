@@ -208,9 +208,9 @@ class TestSummarizeIntegration:
         """Test summarize mode with real VCF and BAM files from fixtures."""
         runner = CliRunner()
 
-        # Use real files from test_output
-        vcf_file = "test_output/2508H52931_bwa_bbtools.normalized.vcf.gz"
-        bam_file = "test_output/2508H52931_bwa_bbtools.sorted.bam"
+        # Use real files from test_outputs fixtures
+        vcf_file = "fixtures/test_outputs/2508H52931_bwa_bbtools.normalized.vcf.gz"
+        bam_file = "fixtures/test_outputs/2508H52931_bwa_bbtools.sorted.bam"
 
         # Check if files exist first
         vcf_path = Path(vcf_file)
@@ -248,8 +248,8 @@ class TestSummarizeIntegration:
         """Test dry-run mode with real files."""
         runner = CliRunner()
 
-        vcf_file = "test_output/2508H52931_bwa_bbtools.normalized.vcf.gz"
-        bam_file = "test_output/2508H52931_bwa_bbtools.sorted.bam"
+        vcf_file = "fixtures/test_outputs/2508H52931_bwa_bbtools.normalized.vcf.gz"
+        bam_file = "fixtures/test_outputs/2508H52931_bwa_bbtools.sorted.bam"
 
         vcf_path = Path(vcf_file)
         bam_path = Path(bam_file)
