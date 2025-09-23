@@ -41,6 +41,10 @@ class ToolConfig:
             "required_for": ["self", "ref", "summarize"],
             "conda_package": "bcftools",
         },
+        "bgzip": {
+            "required_for": ["self", "ref", "summarize"],
+            "conda_package": "htslib",
+        },
         "pileup.sh": {"required_for": ["self", "ref"], "conda_package": "bbmap"},
         "callvariants.sh": {"required_for": ["self", "ref"], "conda_package": "bbmap"},
         "tabix": {
@@ -58,10 +62,12 @@ class ToolConfig:
         self.config = self._load_config()
 
     def _get_default_config_path(self) -> Path:
-        """Get the default configuration file path."""
-        config_dir = Path.home() / ".config" / "ssiamb"
+        """Get the default configuration file path within the package."""
+        # Get the path to this module's directory
+        package_dir = Path(__file__).parent
+        config_dir = package_dir / "config"
         config_dir.mkdir(parents=True, exist_ok=True)
-        return config_dir / "tools.yml"
+        return config_dir / "tools.yaml"
 
     def _load_config(self) -> Dict:
         """Load configuration from file or create default."""
@@ -75,7 +81,9 @@ class ToolConfig:
                 )
                 config = {}
         else:
-            config = {}
+            # Create default config structure
+            config = {"tools": {tool: "" for tool in self.DEFAULT_TOOLS}}
+            # Don't save immediately, let it be created when first modified
 
         # Ensure all tools have entries
         if "tools" not in config:
@@ -83,7 +91,7 @@ class ToolConfig:
 
         for tool in self.DEFAULT_TOOLS:
             if tool not in config["tools"]:
-                config["tools"][tool] = {"path": None, "auto_detected": True}
+                config["tools"][tool] = ""
 
         return config
 
@@ -106,11 +114,11 @@ class ToolConfig:
         if tool_name not in self.DEFAULT_TOOLS:
             return None
 
-        tool_config = self.config["tools"].get(tool_name, {})
+        # Get user-configured path (empty string means auto-detect)
+        user_path = self.config["tools"].get(tool_name, "")
 
         # If user has configured a specific path, use it
-        user_path = tool_config.get("path")
-        if user_path:
+        if user_path and user_path.strip():
             return str(user_path)
 
         # Otherwise, try to find in PATH
@@ -157,10 +165,7 @@ class ToolConfig:
             raise ValueError(f"Tool cannot be executed: {path}")
 
         # Update configuration
-        self.config["tools"][tool_name] = {
-            "path": str(tool_path),
-            "auto_detected": False,
-        }
+        self.config["tools"][tool_name] = str(tool_path)
         self.save_config()
 
         console.print(f"[green]✓[/green] Set {tool_name} path to: {path}")
@@ -171,12 +176,12 @@ class ToolConfig:
             if tool_name not in self.DEFAULT_TOOLS:
                 raise ValueError(f"Unknown tool: {tool_name}")
 
-            self.config["tools"][tool_name] = {"path": None, "auto_detected": True}
+            self.config["tools"][tool_name] = ""
             console.print(f"[green]✓[/green] Reset {tool_name} to auto-detection")
         else:
             # Reset all tools
             for tool in self.DEFAULT_TOOLS:
-                self.config["tools"][tool] = {"path": None, "auto_detected": True}
+                self.config["tools"][tool] = ""
             console.print("[green]✓[/green] Reset all tools to auto-detection")
 
         self.save_config()

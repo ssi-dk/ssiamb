@@ -1,0 +1,10 @@
+tools:
+  bcftools: ''
+  bgzip: ''
+  bwa-mem2: ''
+  callvariants.sh: ''
+  minimap2: ''
+  mosdepth: ''
+  pileup.sh: ''
+  samtools: ''
+  tabix: ''
