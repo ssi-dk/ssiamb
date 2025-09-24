@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Any
 
 from .models import Mapper
 from .tool_config import get_tool_path, get_tool_path_optional
+from .config import get_config, SsiambConfig
 
 
 logger = logging.getLogger(__name__)
@@ -159,8 +160,14 @@ def index_bam(bam_path: Path) -> None:
     logger.debug(f"Indexing BAM file: {bam_path}")
 
     try:
+        # Get samtools configuration
+        config = get_config()
+        samtools_config = config.tools.get("samtools", {})
+        samtools_extra_args = samtools_config.get("extra_args", [])
+
         samtools_path = get_tool_path("samtools")
         cmd = [samtools_path, "index", str(bam_path)]
+        cmd.extend(samtools_extra_args)
         subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         if not index_path.exists():
@@ -363,14 +370,21 @@ def _map_with_minimap2(
     """Map with minimap2 and create sorted BAM."""
     index_path = fasta_path.with_suffix(".mmi")
 
+    # Get minimap2 configuration
+    config = get_config()
+    minimap2_config = config.tools.get("minimap2", {})
+    preset = minimap2_config.get("preset", "sr")  # Default to "sr" if not configured
+    extra_args = minimap2_config.get("extra_args", [])
+
     # Create read group string
     read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:ILLUMINA"
 
     # minimap2 command: map to SAM, pipe to samtools for sorting
+    minimap2_path = get_tool_path("minimap2")
     minimap2_cmd = [
-        "minimap2",
+        minimap2_path,
         "-x",
-        "sr",  # Short read preset
+        preset,  # Short read preset from config
         "-a",  # Output alignments (required by spec)
         "-t",
         str(threads),  # Threads
@@ -379,7 +393,7 @@ def _map_with_minimap2(
         str(index_path),  # Index file
         str(r1_path),  # R1 FASTQ
         str(r2_path),  # R2 FASTQ
-    ]
+    ] + extra_args  # Add any extra arguments from config
 
     samtools_path = get_tool_path("samtools")
     samtools_cmd = [
@@ -390,6 +404,11 @@ def _map_with_minimap2(
         "-o",
         str(output_path),  # Output file
     ]
+
+    # Add extra samtools args from config
+    samtools_config = config.tools.get("samtools", {})
+    samtools_extra_args = samtools_config.get("extra_args", [])
+    samtools_cmd.extend(samtools_extra_args)
 
     logger.debug(f"Running: {' '.join(minimap2_cmd)} | {' '.join(samtools_cmd)}")
 
@@ -434,6 +453,11 @@ def _map_with_bwa_mem2(
     # Create read group string
     read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:ILLUMINA"
 
+    # Get bwa-mem2 configuration
+    config = get_config()
+    bwa_mem2_config = config.tools.get("bwa-mem2", {})
+    bwa_extra_args = bwa_mem2_config.get("extra_args", [])
+
     # bwa-mem2 command: map to SAM, pipe to samtools for sorting
     bwa_mem2_path = get_tool_path("bwa-mem2")
     bwa_cmd = [
@@ -446,7 +470,7 @@ def _map_with_bwa_mem2(
         str(fasta_path),  # Reference FASTA
         str(r1_path),  # R1 FASTQ
         str(r2_path),  # R2 FASTQ
-    ]
+    ] + bwa_extra_args  # Add any extra arguments from config
 
     samtools_path = get_tool_path("samtools")
     samtools_cmd = [
@@ -457,6 +481,11 @@ def _map_with_bwa_mem2(
         "-o",
         str(output_path),  # Output file
     ]
+
+    # Add extra samtools args from config
+    samtools_config = config.tools.get("samtools", {})
+    samtools_extra_args = samtools_config.get("extra_args", [])
+    samtools_cmd.extend(samtools_extra_args)
 
     logger.debug(f"Running: {' '.join(bwa_cmd)} | {' '.join(samtools_cmd)}")
 
@@ -489,12 +518,13 @@ def _map_with_bwa_mem2(
         )
 
 
-def calculate_mapping_rate(bam_path: Path) -> float:
+def calculate_mapping_rate(bam_path: Path, config: SsiambConfig) -> float:
     """
     Calculate mapping rate from BAM file using samtools stats.
 
     Args:
         bam_path: Path to sorted BAM file
+        config: Configuration object
 
     Returns:
         Mapping rate as fraction (0.0-1.0)
@@ -515,7 +545,11 @@ def calculate_mapping_rate(bam_path: Path) -> float:
 
     try:
         # Run samtools stats to get read counts
-        cmd = [samtools_path, "stats", str(bam_path)]
+        cmd = [samtools_path, "stats"]
+        samtools_config = config.tools.get("samtools", {})
+        if samtools_config.get("extra_args"):
+            cmd.extend(samtools_config["extra_args"])
+        cmd.append(str(bam_path))
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         total_reads = 0

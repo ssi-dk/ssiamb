@@ -212,6 +212,10 @@ def run_bbtools_calling(
         if bbtools_mem:
             callvariants_cmd.append(f"-Xmx{bbtools_mem}")
 
+        # Add extra BBTools args from config
+        bbtools_extra_args = config.tools.get("bbtools", {}).get("extra_args", [])
+        callvariants_cmd.extend(bbtools_extra_args)
+
         logger.info(
             f"Running BBTools callvariants: {' '.join(map(str, callvariants_cmd))}"
         )
@@ -317,41 +321,91 @@ def run_bcftools_calling(
         # Ensure output directory exists
         output_vcf.parent.mkdir(parents=True, exist_ok=True)
 
-        # Combine mpileup and call in a pipeline
-        mpileup_cmd = [
-            "bcftools",
-            "mpileup",
-            "-Ou",  # Uncompressed BCF output (required by spec)
-            "--threads",
-            str(threads),
-            "-q",
-            str(mapq_min),  # Minimum mapping quality
-            "-Q",
-            str(baseq_min),  # Minimum base quality
-            "-B",  # Disable BAQ computation
-            "--max-depth",
-            "100000",  # Maximum depth (required by spec)
-            "-a",
-            "FORMAT/AD,ADF,ADR,DP",  # Annotations to include (fixed format)
-            "-f",
-            str(reference_path),  # Reference FASTA
-            str(bam_path),  # Input BAM
-        ]
+        # Get BCFtools configuration
+        config = get_config()
+        bcftools_config = config.tools.get("bcftools", {})
 
-        call_cmd = [
-            "bcftools",
-            "call",
-            "--threads",
-            str(threads),
-            "-m",  # Multiallelic caller
-            "--ploidy",
-            "1",  # Haploid organism
-            "--prior",
-            "1.1e-3",  # Prior for novel mutation rate (required by spec)
-            "-v",  # Output only variants
-            "-o",
-            str(output_vcf),  # Output file
-        ]
+        # Build mpileup command using configuration
+        bcftools_path = get_tool_path("bcftools")
+        mpileup_cmd = [bcftools_path, "mpileup"]
+
+        # Add output type from config
+        output_type = bcftools_config.get("mpileup_output_type", "-Ou")
+        mpileup_cmd.append(output_type)
+
+        # Add standard arguments
+        mpileup_cmd.extend(
+            [
+                "--threads",
+                str(threads),
+                "-q",
+                str(mapq_min),  # Minimum mapping quality
+                "-Q",
+                str(baseq_min),  # Minimum base quality
+            ]
+        )
+
+        # Add BAQ disable flag if configured
+        if bcftools_config.get("disable_baq", True):
+            mpileup_cmd.append("-B")
+
+        # Add max depth from config
+        max_depth = bcftools_config.get("max_depth", 100000)
+        mpileup_cmd.extend(["--max-depth", str(max_depth)])
+
+        # Add format annotations from config
+        annotations = bcftools_config.get("annotations", "FORMAT/AD,ADF,ADR,DP")
+        mpileup_cmd.extend(["-a", annotations])
+
+        # Add existing mpileup args from config
+        mpileup_args = bcftools_config.get("mpileup_args", [])
+        mpileup_cmd.extend(mpileup_args)
+
+        # Add extra mpileup args from config
+        mpileup_extra_args = bcftools_config.get("mpileup_extra_args", [])
+        mpileup_cmd.extend(mpileup_extra_args)
+
+        # Add reference and BAM files
+        mpileup_cmd.extend(
+            [
+                "-f",
+                str(reference_path),  # Reference FASTA
+                str(bam_path),  # Input BAM
+            ]
+        )
+
+        # Build call command using configuration
+        call_cmd = [bcftools_path, "call"]
+        call_cmd.extend(["--threads", str(threads)])
+
+        # Add multiallelic caller if configured
+        if bcftools_config.get("multiallelic_caller", True):
+            call_cmd.append("-m")
+
+        # Add ploidy from config
+        ploidy = bcftools_config.get("ploidy", 1)
+        call_cmd.extend(["--ploidy", str(ploidy)])
+
+        # Add prior mutation rate from config
+        prior_rate = bcftools_config.get("prior_mutation_rate", "1.1e-3")
+        call_cmd.extend(["--prior", str(prior_rate)])
+
+        # Add existing call args from config
+        call_args = bcftools_config.get("call_args", [])
+        call_cmd.extend(call_args)
+
+        # Add extra call args from config
+        call_extra_args = bcftools_config.get("call_extra_args", [])
+        call_cmd.extend(call_extra_args)
+
+        # Add output arguments
+        call_cmd.extend(
+            [
+                "-v",  # Output only variants
+                "-o",
+                str(output_vcf),  # Output file
+            ]
+        )
 
         logger.info(
             f"Running bcftools pipeline: {' '.join(mpileup_cmd)} | {' '.join(call_cmd)}"

@@ -29,22 +29,41 @@ bcftools:
   mpileup_args: ["-d", "1000"]  # mpileup-specific arguments
   call_args: ["-mv"]            # call-specific arguments
   version_timeout: 5            # Timeout for version check (seconds)
+  # Additional mpileup parameters
+  mpileup_output_type: "-Ou"   # Uncompressed BCF output for piping
+  disable_baq: true             # Disable BAQ computation (-B flag)
+  max_depth: 100000             # Maximum depth for mpileup
+  annotations: "FORMAT/AD,ADF,ADR,DP"  # Format annotations to include
+  # Additional call parameters
+  multiallelic_caller: true     # Use multiallelic caller (-m flag)
+  ploidy: 1                     # Organism ploidy level
+  prior_mutation_rate: "1.1e-3" # Prior for novel mutation rate
+  # General extra arguments
+  mpileup_extra_args: []        # Additional mpileup command-line arguments
+  call_extra_args: []           # Additional call command-line arguments
 
 # BGzip compression tool
 bgzip:
   path: ''              # Tool path (empty = auto-detect from PATH)
+  stdout_compress: true # Compress to stdout (-c flag)
+  extra_args: []        # Additional command-line arguments
 
 # Mosdepth depth calculation
 mosdepth:
   path: ''              # Tool path (empty = auto-detect from PATH)
   window_size: 500      # Window size for depth calculation
+  skip_per_base: true   # Skip per-base output for efficiency (--no-per-base)
   extra_args: []        # Additional command-line arguments
 
 # SAMtools suite
 samtools:
   path: ''              # Tool path (empty = auto-detect from PATH)
   depth_args: ["-a"]    # Include all positions in depth calculation
+  extra_args: []        # Additional command-line arguments (applied to all subcommands)
 
 # Tabix indexing tool
 tabix:
   path: ''              # Tool path (empty = auto-detect from PATH)
+  vcf_preset: "vcf"     # Preset for VCF files (-p vcf)
+  bed_preset: "bed"     # Preset for BED files (-p bed)
+  extra_args: []        # Additional command-line arguments

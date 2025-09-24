@@ -142,8 +142,18 @@ def normalize_and_split(
             logger.debug(f"bcftools norm stderr: {result.stderr}")
 
         # Index the compressed VCF
+        config = get_config()
+        tabix_config = config.tools.get("tabix", {})
+        vcf_preset = tabix_config.get("vcf_preset", "vcf")
+
         tabix_path = get_tool_path("tabix")
-        tabix_cmd = [tabix_path, "-p", "vcf", str(normalized_vcf)]
+        tabix_cmd = [tabix_path, "-p", vcf_preset]
+
+        # Add extra tabix args from config
+        tabix_extra_args = tabix_config.get("extra_args", [])
+        tabix_cmd.extend(tabix_extra_args)
+
+        tabix_cmd.append(str(normalized_vcf))
         logger.debug(f"Indexing VCF: {' '.join(tabix_cmd)}")
 
         subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
@@ -685,8 +695,18 @@ def emit_vcf(
                             records_written += 1
 
         # Index the compressed VCF
+        config = get_config()
+        tabix_config = config.tools.get("tabix", {})
+        vcf_preset = tabix_config.get("vcf_preset", "vcf")
+
         tabix_path = get_tool_path("tabix")
-        tabix_cmd = [tabix_path, "-p", "vcf", str(output_path)]
+        tabix_cmd = [tabix_path, "-p", vcf_preset]
+
+        # Add extra tabix args from config
+        tabix_extra_args = tabix_config.get("extra_args", [])
+        tabix_cmd.extend(tabix_extra_args)
+
+        tabix_cmd.append(str(output_path))
         subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
 
         logger.info(
@@ -842,8 +862,19 @@ def emit_bed(
                 f.write("\t".join(bed_record) + "\n")
 
         # Compress with bgzip
+        config = get_config()
+        bgzip_config = config.tools.get("bgzip", {})
+
         bgzip_path = get_tool_path("bgzip")
-        bgzip_cmd = [bgzip_path, "-c", str(temp_bed)]
+        bgzip_cmd = [bgzip_path]
+        if bgzip_config.get("stdout_compress", True):
+            bgzip_cmd.append("-c")
+
+        # Add extra bgzip args from config
+        bgzip_extra_args = bgzip_config.get("extra_args", [])
+        bgzip_cmd.extend(bgzip_extra_args)
+
+        bgzip_cmd.append(str(temp_bed))
         with open(output_path, "w") as f:
             subprocess.run(bgzip_cmd, stdout=f, check=True)
 
@@ -851,8 +882,17 @@ def emit_bed(
         temp_bed.unlink()
 
         # Index with tabix
+        tabix_config = config.tools.get("tabix", {})
+        bed_preset = tabix_config.get("bed_preset", "bed")
+
         tabix_path = get_tool_path("tabix")
-        tabix_cmd = [tabix_path, "-p", "bed", str(output_path)]
+        tabix_cmd = [tabix_path, "-p", bed_preset]
+
+        # Add extra tabix args from config
+        tabix_extra_args = tabix_config.get("extra_args", [])
+        tabix_cmd.extend(tabix_extra_args)
+
+        tabix_cmd.append(str(output_path))
         subprocess.run(tabix_cmd, capture_output=True, text=True, check=True)
 
         logger.info(

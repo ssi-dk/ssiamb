@@ -22,6 +22,15 @@ from src.ssiamb.mapping import (
     ExternalToolError,
 )
 from src.ssiamb.models import Mapper
+from unittest.mock import MagicMock
+
+
+@pytest.fixture
+def mock_config():
+    """Mock config for testing."""
+    config = MagicMock()
+    config.tools.get.return_value = {}
+    return config
 
 
 class TestMappingRealData:
@@ -164,7 +173,7 @@ class TestMappingRealData:
             print(f"BWA-MEM2 indexing completed in {index_time:.2f} seconds")
 
     def test_minimap2_mapping_real_data(
-        self, real_reference_path, real_reads_r1_path, real_reads_r2_path
+        self, real_reference_path, real_reads_r1_path, real_reads_r2_path, mock_config
     ):
         """Test minimap2 mapping with real data."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -198,7 +207,7 @@ class TestMappingRealData:
             assert result_bam.stat().st_size > 1000, "Output BAM should not be empty"
 
             # Check mapping rate
-            mapping_rate = calculate_mapping_rate(result_bam)
+            mapping_rate = calculate_mapping_rate(result_bam, mock_config)
             assert 0.0 <= mapping_rate <= 1.0, "Mapping rate should be between 0 and 1"
             assert (
                 mapping_rate > 0.5
@@ -213,7 +222,7 @@ class TestMappingRealData:
             print(f"Mapping rate: {mapping_rate:.3f}")
 
     def test_bwa_mem2_mapping_real_data(
-        self, real_reference_path, real_reads_r1_path, real_reads_r2_path
+        self, real_reference_path, real_reads_r1_path, real_reads_r2_path, mock_config
     ):
         """Test bwa-mem2 mapping with real data."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -247,7 +256,7 @@ class TestMappingRealData:
             assert result_bam.stat().st_size > 1000, "Output BAM should not be empty"
 
             # Check mapping rate
-            mapping_rate = calculate_mapping_rate(result_bam)
+            mapping_rate = calculate_mapping_rate(result_bam, mock_config)
             assert 0.0 <= mapping_rate <= 1.0, "Mapping rate should be between 0 and 1"
             assert (
                 mapping_rate > 0.5
@@ -262,7 +271,7 @@ class TestMappingRealData:
             print(f"Mapping rate: {mapping_rate:.3f}")
 
     def test_mapping_rate_calculation_realistic(
-        self, real_reference_path, real_reads_r1_path, real_reads_r2_path
+        self, real_reference_path, real_reads_r1_path, real_reads_r2_path, mock_config
     ):
         """Test mapping rate calculation with realistic data."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -288,7 +297,7 @@ class TestMappingRealData:
 
             # Test mapping rate calculation
             start_time = time.time()
-            mapping_rate = calculate_mapping_rate(output_bam)
+            mapping_rate = calculate_mapping_rate(output_bam, mock_config)
             calc_time = time.time() - start_time
 
             # Validate mapping rate
@@ -310,7 +319,7 @@ class TestMappingRealData:
             )
 
     def test_mapper_comparison_real_data(
-        self, real_reference_path, real_reads_r1_path, real_reads_r2_path
+        self, real_reference_path, real_reads_r1_path, real_reads_r2_path, mock_config
     ):
         """Compare minimap2 vs bwa-mem2 performance and mapping rates with real data."""
         results = {}
@@ -344,7 +353,7 @@ class TestMappingRealData:
                 map_time = time.time() - map_start
 
                 # Calculate mapping rate
-                mapping_rate = calculate_mapping_rate(result_bam)
+                mapping_rate = calculate_mapping_rate(result_bam, mock_config)
 
                 results[mapper.value] = {
                     "index_time": index_time,
@@ -408,7 +417,7 @@ class TestMappingEdgeCases:
                     output_path=output_bam,
                 )
 
-    def test_corrupted_bam_mapping_rate(self):
+    def test_corrupted_bam_mapping_rate(self, mock_config):
         """Test mapping rate calculation with corrupted BAM."""
         with tempfile.NamedTemporaryFile(suffix=".bam", delete=False) as f:
             f.write(b"This is not a BAM file")
@@ -416,7 +425,7 @@ class TestMappingEdgeCases:
 
         try:
             with pytest.raises((Exception, MappingError)):
-                calculate_mapping_rate(fake_bam)
+                calculate_mapping_rate(fake_bam, mock_config)
         finally:
             fake_bam.unlink()  # Clean up
 

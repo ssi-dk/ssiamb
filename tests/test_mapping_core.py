@@ -9,7 +9,7 @@ import pytest
 import tempfile
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from src.ssiamb.mapping import (
     get_index_files,
@@ -18,6 +18,14 @@ from src.ssiamb.mapping import (
     MappingError,
 )
 from src.ssiamb.models import Mapper
+
+
+@pytest.fixture
+def mock_config():
+    """Mock config for testing."""
+    config = MagicMock()
+    config.tools.samtools.extra_args = []
+    return config
 
 
 class TestIndexFiles:
@@ -98,7 +106,9 @@ class TestMappingRate:
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.mapping.get_tool_path")
-    def test_calculate_mapping_rate_success(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_success(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test successful mapping rate calculation."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
 
@@ -113,14 +123,16 @@ SN	reads unmapped:	150
         with tempfile.NamedTemporaryFile(suffix=".bam") as tmp_bam:
             bam_path = Path(tmp_bam.name)
 
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, mock_config)
 
             assert mapping_rate == 0.85  # 850/1000
             mock_run.assert_called_once()
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.mapping.get_tool_path")
-    def test_calculate_mapping_rate_zero_reads(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_zero_reads(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test mapping rate calculation with zero reads."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
 
@@ -135,13 +147,15 @@ SN	reads unmapped:	0
         with tempfile.NamedTemporaryFile(suffix=".bam") as tmp_bam:
             bam_path = Path(tmp_bam.name)
 
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, mock_config)
 
             assert mapping_rate == 0.0
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.tool_config.get_tool_path")
-    def test_calculate_mapping_rate_samtools_error(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_samtools_error(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test mapping rate calculation when samtools fails."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
         # Mock subprocess.CalledProcessError for non-zero return code
@@ -153,7 +167,7 @@ SN	reads unmapped:	0
             bam_path = Path(tmp_bam.name)
 
             with pytest.raises(MappingError, match="samtools stats failed"):
-                calculate_mapping_rate(bam_path)
+                calculate_mapping_rate(bam_path, mock_config)
 
 
 class TestInputValidation:
@@ -210,7 +224,9 @@ class TestMappingUtilities:
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.tool_config.get_tool_path")
-    def test_calculate_mapping_rate_complex_output(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_complex_output(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test mapping rate calculation with complex samtools output."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
 
@@ -261,7 +277,7 @@ SN	percentage of properly paired reads (%):	88.0
         with tempfile.NamedTemporaryFile(suffix=".bam") as tmp_bam:
             bam_path = Path(tmp_bam.name)
 
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, mock_config)
 
             # 9234 mapped out of 10000 total
             assert mapping_rate == 0.9234
@@ -270,7 +286,7 @@ SN	percentage of properly paired reads (%):	88.0
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.tool_config.get_tool_path")
     def test_calculate_mapping_rate_malformed_output(
-        self, mock_get_tool_path, mock_run
+        self, mock_get_tool_path, mock_run, mock_config
     ):
         """Test mapping rate calculation with malformed samtools output."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
@@ -286,7 +302,7 @@ CHK	checksum:	abc123
         with tempfile.NamedTemporaryFile(suffix=".bam") as tmp_bam:
             bam_path = Path(tmp_bam.name)
 
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, mock_config)
 
             # Should return 0.0 when no expected fields are found
             assert mapping_rate == 0.0

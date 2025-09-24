@@ -24,6 +24,14 @@ from src.ssiamb.mapping import (
 from src.ssiamb.models import Mapper
 
 
+@pytest.fixture
+def mock_config():
+    """Mock config for testing."""
+    config = MagicMock()
+    config.tools.get.return_value = {}
+    return config
+
+
 class TestExternalToolDetection:
     """Test external tool availability detection."""
 
@@ -423,7 +431,9 @@ class TestMappingRate:
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.mapping.get_tool_path")
-    def test_calculate_mapping_rate_success(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_success(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test successful mapping rate calculation."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
 
@@ -438,14 +448,16 @@ SN	reads unmapped:	150
         with tempfile.NamedTemporaryFile(suffix=".bam") as tmp_bam:
             bam_path = Path(tmp_bam.name)
 
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, mock_config)
 
             assert mapping_rate == 0.85  # 850/1000
             mock_run.assert_called_once()
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.mapping.get_tool_path")
-    def test_calculate_mapping_rate_zero_reads(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_zero_reads(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test mapping rate calculation with zero reads."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
 
@@ -460,13 +472,15 @@ SN	reads unmapped:	0
         with tempfile.NamedTemporaryFile(suffix=".bam") as tmp_bam:
             bam_path = Path(tmp_bam.name)
 
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, mock_config)
 
             assert mapping_rate == 0.0
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.mapping.get_tool_path")
-    def test_calculate_mapping_rate_samtools_error(self, mock_get_tool_path, mock_run):
+    def test_calculate_mapping_rate_samtools_error(
+        self, mock_get_tool_path, mock_run, mock_config
+    ):
         """Test mapping rate calculation when samtools fails."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
         # Mock subprocess.CalledProcessError for non-zero return code
@@ -478,7 +492,7 @@ SN	reads unmapped:	0
             bam_path = Path(tmp_bam.name)
 
             with pytest.raises(MappingError, match="samtools stats failed"):
-                calculate_mapping_rate(bam_path)
+                calculate_mapping_rate(bam_path, mock_config)
 
 
 class TestMappingErrorHandling:
@@ -535,6 +549,7 @@ class TestMappingErrorHandling:
         mock_setup,
         expected_error,
         expected_message,
+        mock_config,
     ):
         """Test error scenarios across different mapping functions."""
         # Setup mocks based on scenario
@@ -550,11 +565,11 @@ class TestMappingErrorHandling:
         bam_path = Path(mock_setup.get("bam_path", "/tmp/test.bam"))
 
         with pytest.raises(expected_error, match=expected_message):
-            calculate_mapping_rate(bam_path)
+            calculate_mapping_rate(bam_path, mock_config)
 
     @patch("src.ssiamb.mapping.subprocess.run")
     @patch("src.ssiamb.mapping.get_tool_path")
-    def test_subprocess_failure_error(self, mock_get_tool_path, mock_run):
+    def test_subprocess_failure_error(self, mock_get_tool_path, mock_run, mock_config):
         """Test subprocess failure scenario separately with proper file setup."""
         mock_get_tool_path.return_value = "/usr/bin/samtools"
         mock_run.side_effect = subprocess.CalledProcessError(1, "samtools")
@@ -566,7 +581,7 @@ class TestMappingErrorHandling:
 
         try:
             with pytest.raises(MappingError, match="samtools stats failed"):
-                calculate_mapping_rate(bam_path)
+                calculate_mapping_rate(bam_path, mock_config)
         finally:
             bam_path.unlink()  # Clean up the temporary file
 

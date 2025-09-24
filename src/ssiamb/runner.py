@@ -66,6 +66,7 @@ from .provenance import (
     ProvenanceCounts,
 )
 from .version import __version__
+from .config import get_config
 import pysam
 
 logger = logging.getLogger(__name__)
@@ -445,6 +446,9 @@ def run_self(plan: RunPlan) -> SummaryRow:
     logger.info(f"Running self mode for sample {plan.sample}")
     start_time = time.time()
 
+    # Get configuration
+    config = get_config()
+
     # Initialize variables for error handling
     ambiguous_snv_count = 0
     all_variants_count = 0
@@ -560,7 +564,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
 
         # Calculate mapping rate from BAM statistics
         try:
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, config)
             logger.info(f"Mapping rate: {mapping_rate:.4f}")
         except (MappingError, ExternalToolError) as e:
             logger.warning(f"Could not calculate mapping rate: {e}")
@@ -925,6 +929,9 @@ def run_ref(
     logger.info(f"Running ref mode for sample {plan.sample}")
     start_time = time.time()
 
+    # Get configuration
+    config = get_config()
+
     # Initialize variables for error handling
     ambiguous_snv_count = 0
     all_variants_count = 0
@@ -1213,7 +1220,7 @@ def run_ref(
 
         # Calculate mapping rate from BAM statistics
         try:
-            mapping_rate = calculate_mapping_rate(bam_path)
+            mapping_rate = calculate_mapping_rate(bam_path, config)
             logger.info(f"Mapping rate: {mapping_rate:.4f}")
         except (MappingError, ExternalToolError) as e:
             logger.warning(f"Could not calculate mapping rate: {e}")
@@ -1615,6 +1622,9 @@ def run_summarize(
     logger.info(f"Running summarize mode on VCF: {vcf}, BAM: {bam}")
     start_time = time.time()
 
+    # Get configuration
+    config = get_config()
+
     try:
         # Step 1: Validate required inputs
         if not vcf.exists():
@@ -1695,7 +1705,7 @@ def run_summarize(
         )
 
         # Step 6: Calculate mapping rate from BAM
-        calculate_mapping_rate(bam)
+        calculate_mapping_rate(bam, config)
 
         # Step 7: Create summary row
         summary = SummaryRow(

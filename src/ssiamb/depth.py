@@ -111,18 +111,34 @@ def run_mosdepth(
     if not check_mosdepth_available():
         raise DepthAnalysisError("mosdepth not found in PATH")
 
+    # Get mosdepth configuration
+    mosdepth_config = config.tools.get("mosdepth", {})
+
     # Construct mosdepth command
     mosdepth_path = get_tool_path("mosdepth")
     cmd = [
         mosdepth_path,
         "--mapq",
         str(mapq_threshold),
-        "--no-per-base",  # Skip per-base output for efficiency
         "--threads",
         str(threads),
-        str(output_prefix),
-        str(bam_path),
     ]
+
+    # Add --no-per-base flag if configured
+    if mosdepth_config.get("skip_per_base", True):
+        cmd.append("--no-per-base")
+
+    # Add any extra arguments from config
+    extra_args = mosdepth_config.get("extra_args", [])
+    cmd.extend(extra_args)
+
+    # Add output prefix and input BAM
+    cmd.extend(
+        [
+            str(output_prefix),
+            str(bam_path),
+        ]
+    )
 
     logger.info(f"Running mosdepth: {' '.join(cmd)}")
 
