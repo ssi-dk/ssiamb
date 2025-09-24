@@ -248,13 +248,13 @@ def self(
             "--sample", help="Sample name (inferred from filenames if not provided)"
         ),
     ] = None,
-    output_dir: Annotated[
+    outdir: Annotated[
         Optional[Path],
-        typer.Option("--outdir", "-o", help="Output directory (default: current)"),
+        typer.Option("--outdir", "-o", help="Output directory"),
     ] = None,
     threads: Annotated[
         int,
-        typer.Option("--threads", "-t", help="Number of threads"),
+        typer.Option("--threads", help="Number of threads to use"),
     ] = 4,
     mapper: Annotated[
         str,
@@ -274,7 +274,10 @@ def self(
     ] = 10,
     maf_min: Annotated[
         float,
-        typer.Option("--maf-min", help="Minimum minor allele frequency"),
+        typer.Option(
+            "--maf-min",
+            help="Minimum minor allele frequency for analysis (post-calling filter)",
+        ),
     ] = 0.1,
     mapq: Annotated[
         int,
@@ -374,7 +377,7 @@ def self(
             r2=r2,
             assembly=assembly,
             sample=sample,
-            output_dir=output_dir,
+            output_dir=outdir,
             threads=threads,
             mapper=mapper,
             caller=caller,
@@ -408,7 +411,7 @@ def self(
             from .provenance import write_provenance_json
 
             out_dir = resolve_output_directory(
-                specified_dir=output_dir,
+                specified_dir=outdir,
                 default_fallback=None,
                 command_name="self_mapping",
                 dry_run=False,
@@ -487,7 +490,10 @@ def ref(
     ] = 10,
     maf_min: Annotated[
         float,
-        typer.Option("--maf-min", help="Minimum minor allele frequency"),
+        typer.Option(
+            "--maf-min",
+            help="Minimum minor allele frequency (applied during analysis, not variant calling)",
+        ),
     ] = 0.1,
     mapq: Annotated[
         int,

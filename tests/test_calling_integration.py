@@ -118,7 +118,7 @@ class TestCallingRealData:
                 threads=4,
                 mapq_min=20,
                 baseq_min=20,
-                minallelefraction=0.05,
+                minallelefraction=0.0,
             )
             calling_time = time.time() - start_time
 
@@ -296,7 +296,7 @@ class TestCallingRealData:
                     caller=caller,
                     sample_name="test_sample",
                     threads=4,
-                    minallelefraction=0.05 if caller == Caller.BBTOOLS else 0.0,
+                    minallelefraction=0.0,
                 )
                 call_time = time.time() - call_start
 
@@ -487,7 +487,7 @@ class TestCallingPerformance:
                     caller=Caller.BBTOOLS,  # Use BBTools for consistency
                     sample_name="test_sample",
                     threads=threads,
-                    minallelefraction=0.05,
+                    minallelefraction=0.0,
                 )
                 call_time = time.time() - start_time
 
@@ -537,7 +537,7 @@ class TestCallingPerformance:
                     caller=caller,
                     sample_name="test_sample",
                     threads=4,
-                    minallelefraction=0.05 if caller == Caller.BBTOOLS else 0.0,
+                    minallelefraction=0.0,
                 )
                 call_time = time.time() - start_time
 
