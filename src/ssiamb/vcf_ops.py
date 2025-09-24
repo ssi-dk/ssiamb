@@ -17,6 +17,7 @@ import pysam
 import numpy as np
 
 from .tool_config import get_tool_path, get_tool_path_optional
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -357,18 +358,27 @@ class AmbigGrid:
     MAF binning: bin = floor(100 * MAF), capped at 50.
     """
 
-    def __init__(self, dp_cap: int = 100):
+    def __init__(self, dp_cap: Optional[int] = None):
         """
-        Initialize grid.
+        Initialize grid using configuration defaults.
 
         Args:
-            dp_cap: Maximum depth value (higher values are capped)
+            dp_cap: Maximum depth value (uses config default if None)
         """
+        config = get_config()
+        if dp_cap is None:
+            dp_cap = config.get_vcf_setting("dp_cap", 100)
+
+        # Ensure dp_cap is an integer
+        assert isinstance(dp_cap, int), "dp_cap must be an integer"
+
         self.dp_cap = dp_cap
-        self.maf_bins = 51  # 0.00 to 0.50 in 0.01 increments
+        self.maf_bins = config.get_vcf_setting(
+            "maf_bins", 51
+        )  # 0.00 to 0.50 in 0.01 increments
 
         # Grid: [depth][maf_bin] = count
-        self.grid = np.zeros((dp_cap + 1, self.maf_bins), dtype=int)
+        self.grid = np.zeros((self.dp_cap + 1, self.maf_bins), dtype=int)
 
     def add_site(self, depth: int, maf: float) -> None:
         """

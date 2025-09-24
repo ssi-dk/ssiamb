@@ -18,6 +18,8 @@ import shutil
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 
+from .config import get_config
+
 console = Console()
 
 
@@ -88,10 +90,12 @@ class RefSeqDownloader:
         self.verbose = verbose
         self.create_indexes = create_indexes
         self.session = requests.Session()
-        # Set user agent for NCBI API
-        self.session.headers.update(
-            {"User-Agent": "ssiamb/0.1.0 (https://github.com/ssi-dk/ssiamb)"}
+        # Set user agent for NCBI API from config
+        config = get_config()
+        user_agent = config.get_refseq_setting(
+            "user_agent", "ssiamb/0.8.0 (https://github.com/ssi-dk/ssiamb)"
         )
+        self.session.headers.update({"User-Agent": user_agent})
 
     def normalize_species_name(self, species: str) -> str:
         """Normalize species name to Genus_species format."""
@@ -138,9 +142,15 @@ class RefSeqDownloader:
 
         try:
             # Try reference genomes first
+            config = get_config()
+            rate_limit_delay = config.get_refseq_setting("rate_limit_delay", 0.4)
+            api_timeout = config.get_refseq_setting("api_timeout", 30)
+
             for params in [params_ref, params_rep, params_all]:
-                time.sleep(0.4)  # Rate limiting
-                response = self.session.get(self.ESEARCH_URL, params=params, timeout=30)
+                time.sleep(rate_limit_delay)  # Rate limiting
+                response = self.session.get(
+                    self.ESEARCH_URL, params=params, timeout=api_timeout
+                )
                 response.raise_for_status()
                 data = response.json()
 
@@ -199,9 +209,15 @@ class RefSeqDownloader:
 
         try:
             # Add delay to respect NCBI rate limits (max 3 requests per second)
-            time.sleep(0.4)
+            config = get_config()
+            rate_limit_delay = config.get_refseq_setting("rate_limit_delay", 0.4)
+            batch_timeout = config.get_refseq_setting("batch_timeout", 60)
 
-            response = self.session.get(self.ESUMMARY_URL, params=params, timeout=60)
+            time.sleep(rate_limit_delay)
+
+            response = self.session.get(
+                self.ESUMMARY_URL, params=params, timeout=batch_timeout
+            )
             response.raise_for_status()
             data = response.json()
 

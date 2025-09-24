@@ -28,6 +28,24 @@ class SsiambConfig:
     # Analysis thresholds
     thresholds: Dict[str, Any]
 
+    # Quality control thresholds
+    qc: Dict[str, Any]
+
+    # Depth analysis parameters
+    depth: Dict[str, Any]
+
+    # VCF processing parameters
+    vcf: Dict[str, Any]
+
+    # RefSeq API configuration
+    refseq: Dict[str, Any]
+
+    # Variant calling defaults
+    calling: Dict[str, Any]
+
+    # Resource management
+    resources: Dict[str, Any]
+
     # Species aliases for reference resolution
     species_aliases: Dict[str, str]
 
@@ -67,6 +85,12 @@ class SsiambConfig:
 
         return cls(
             thresholds=config.get("thresholds", {}),
+            qc=config.get("qc", {}),
+            depth=config.get("depth", {}),
+            vcf=config.get("vcf", {}),
+            refseq=config.get("refseq", {}),
+            calling=config.get("calling", {}),
+            resources=config.get("resources", {}),
             species_aliases=config.get("species_aliases", {}),
             tools=config.get("tools", {}),
             output=config.get("output", {}),
@@ -85,6 +109,42 @@ class SsiambConfig:
                     "dp_cap": 100,
                     "mapq_min": 20,
                     "baseq_min": 20,
+                },
+                "qc": {
+                    "min_breadth_10x": 0.80,
+                    "min_callable_bases": 1000000,
+                    "min_mapping_rate_ref": 0.70,
+                },
+                "depth": {
+                    "min_contig_length": 500,
+                    "default_mapq_threshold": 30,
+                    "default_threads": 4,
+                },
+                "vcf": {
+                    "dp_cap": 100,
+                    "maf_bins": 51,
+                    "maf_max": 0.50,
+                },
+                "refseq": {
+                    "rate_limit_delay": 0.4,
+                    "api_timeout": 30,
+                    "batch_timeout": 60,
+                    "user_agent": "ssiamb/0.8.0 (https://github.com/ssi-dk/ssiamb)",
+                    "max_retries": 3,
+                },
+                "calling": {
+                    "default_threads": 1,
+                    "default_mapq_min": 20,
+                    "default_baseq_min": 20,
+                    "default_minallelefraction": 0.0,
+                    "ploidy": 1,
+                },
+                "resources": {
+                    "default_threads": 4,
+                    "default_memory": "16g",
+                    "timeout_short": 30,
+                    "timeout_long": 300,
+                    "walltime_hint": "2h",
                 },
                 "species_aliases": {},
                 "tools": {},
@@ -177,6 +237,30 @@ class SsiambConfig:
     def get_output_setting(self, key: str, default: Any = None) -> Any:
         """Get an output formatting setting."""
         return self.output.get(key, default)
+
+    def get_qc_setting(self, key: str, default: Any = None) -> Any:
+        """Get a QC threshold setting."""
+        return self.qc.get(key, default)
+
+    def get_depth_setting(self, key: str, default: Any = None) -> Any:
+        """Get a depth analysis setting."""
+        return self.depth.get(key, default)
+
+    def get_vcf_setting(self, key: str, default: Any = None) -> Any:
+        """Get a VCF processing setting."""
+        return self.vcf.get(key, default)
+
+    def get_refseq_setting(self, key: str, default: Any = None) -> Any:
+        """Get a RefSeq API setting."""
+        return self.refseq.get(key, default)
+
+    def get_calling_setting(self, key: str, default: Any = None) -> Any:
+        """Get a variant calling setting."""
+        return self.calling.get(key, default)
+
+    def get_resource_setting(self, key: str, default: Any = None) -> Any:
+        """Get a resource management setting."""
+        return self.resources.get(key, default)
 
 
 # Global configuration instance

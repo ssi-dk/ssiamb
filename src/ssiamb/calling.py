@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from .models import Caller
 from .tool_config import get_tool_path, get_tool_path_optional
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +148,10 @@ def run_bbtools_calling(
     reference_path: Path,
     output_vcf: Path,
     sample_name: str,
-    threads: int = 1,
-    mapq_min: int = 20,
-    baseq_min: int = 20,
-    minallelefraction: float = 0.0,
+    threads: Optional[int] = None,
+    mapq_min: Optional[int] = None,
+    baseq_min: Optional[int] = None,
+    minallelefraction: Optional[float] = None,
     bbtools_mem: Optional[str] = None,
 ) -> VariantCallResult:
     """
@@ -175,6 +176,17 @@ def run_bbtools_calling(
     """
     import time
 
+    # Get config defaults for None parameters
+    config = get_config()
+    if threads is None:
+        threads = config.get_calling_setting("default_threads", 1)
+    if mapq_min is None:
+        mapq_min = config.get_calling_setting("default_mapq_min", 20)
+    if baseq_min is None:
+        baseq_min = config.get_calling_setting("default_baseq_min", 20)
+    if minallelefraction is None:
+        minallelefraction = config.get_calling_setting("default_minallelefraction", 0.0)
+
     start_time = time.time()
 
     try:
@@ -188,7 +200,7 @@ def run_bbtools_calling(
             f"in={bam_path}",
             f"ref={reference_path}",
             f"vcf={output_vcf}",  # Use vcf= for VCF output
-            "ploidy=1",  # Haploid organism
+            f"ploidy={config.get_calling_setting('ploidy', 1)}",  # Organism ploidy from config
             "clearfilters=t",  # Clear all filters to get raw variants
             f"minallelefraction={minallelefraction}",
             f"minavgmapq={mapq_min}",

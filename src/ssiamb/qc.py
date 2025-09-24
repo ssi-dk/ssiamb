@@ -10,6 +10,7 @@ from typing import List, Optional
 import logging
 
 from .models import Mode
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,19 @@ class QCWarning:
 class QCThresholds:
     """QC warning thresholds as specified in spec.md §8."""
 
-    min_breadth_10x: float = 0.80
-    min_callable_bases: int = 1_000_000  # 1e6
-    min_mapping_rate_ref: float = 0.70  # Only for ref mode
+    min_breadth_10x: float
+    min_callable_bases: int
+    min_mapping_rate_ref: float
+
+    @classmethod
+    def from_config(cls) -> "QCThresholds":
+        """Create QC thresholds from current configuration."""
+        config = get_config()
+        return cls(
+            min_breadth_10x=config.get_qc_setting("min_breadth_10x", 0.80),
+            min_callable_bases=config.get_qc_setting("min_callable_bases", 1_000_000),
+            min_mapping_rate_ref=config.get_qc_setting("min_mapping_rate_ref", 0.70),
+        )
 
 
 def check_qc_metrics(
@@ -54,7 +65,7 @@ def check_qc_metrics(
         List of QC warnings
     """
     if thresholds is None:
-        thresholds = QCThresholds()
+        thresholds = QCThresholds.from_config()
 
     warnings = []
 

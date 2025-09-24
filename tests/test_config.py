@@ -328,6 +328,12 @@ class TestConfigGetterMethods:
         """Test get_threshold method."""
         config = SsiambConfig(
             thresholds={"dp_min": 15, "maf_min": 0.05},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
             species_aliases={},
             tools={},
             output={},
@@ -342,6 +348,12 @@ class TestConfigGetterMethods:
         """Test get_species_alias method."""
         config = SsiambConfig(
             thresholds={},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
             species_aliases={
                 "ecoli": "Escherichia coli",
                 "staph": "Staphylococcus aureus",
@@ -358,6 +370,12 @@ class TestConfigGetterMethods:
         """Test get_tool_setting method."""
         config = SsiambConfig(
             thresholds={},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
             species_aliases={},
             tools={
                 "minimap2": {"threads": 8, "preset": "sr"},
@@ -379,6 +397,12 @@ class TestConfigGetterMethods:
         """Test get_output_setting method."""
         config = SsiambConfig(
             thresholds={},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
             species_aliases={},
             tools={},
             output={"format": "tsv", "precision": 3},
@@ -403,8 +427,22 @@ class TestGlobalConfigManagement:
     @patch("src.ssiamb.config.SsiambConfig.load")
     def test_get_config_lazy_loading(self, mock_load):
         """Test get_config lazy loading."""
+        # Clear any existing global config state
+        import src.ssiamb.config
+
+        src.ssiamb.config._config = None
+
         mock_config = SsiambConfig(
-            thresholds={}, species_aliases={}, tools={}, output={}
+            thresholds={},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
+            species_aliases={},
+            tools={},
+            output={},
         )
         mock_load.return_value = mock_config
 
@@ -422,7 +460,16 @@ class TestGlobalConfigManagement:
     def test_set_config(self):
         """Test set_config function."""
         test_config = SsiambConfig(
-            thresholds={"dp_min": 25}, species_aliases={}, tools={}, output={}
+            thresholds={"dp_min": 25},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
+            species_aliases={},
+            tools={},
+            output={},
         )
 
         set_config(test_config)
@@ -435,7 +482,16 @@ class TestGlobalConfigManagement:
     def test_load_config(self, mock_load):
         """Test load_config function."""
         test_config = SsiambConfig(
-            thresholds={"dp_min": 30}, species_aliases={}, tools={}, output={}
+            thresholds={"dp_min": 30},
+            qc={},
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
+            species_aliases={},
+            tools={},
+            output={},
         )
         mock_load.return_value = test_config
 

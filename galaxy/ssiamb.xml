@@ -2,20 +2,20 @@
     <description>Count ambiguous sites in bacterial WGS data</description>
     
     <macros>
-        <token name="@TOOL_VERSION@">0.1.0</token>
+        <token name="@TOOL_VERSION@">0.8.0</token>
         <token name="@VERSION_SUFFIX@">0</token>
     </macros>
     
     <requirements>
         <requirement type="package" version="@TOOL_VERSION@">ssiamb</requirement>
-        <requirement type="package" version="2.27">minimap2</requirement>
+        <requirement type="package" version="2.28">minimap2</requirement>
         <requirement type="package" version="2.2.1">bwa-mem2</requirement>
-        <requirement type="package" version="1.19.2">samtools</requirement>
-        <requirement type="package" version="1.19">bcftools</requirement>
-        <requirement type="package" version="39.01">bbmap</requirement>
-        <requirement type="package" version="0.3.6">mosdepth</requirement>
-        <requirement type="package" version="2.32.0">bedtools</requirement>
-        <requirement type="package" version="1.19">htslib</requirement>
+        <requirement type="package" version="1.20">samtools</requirement>
+        <requirement type="package" version="1.20">bcftools</requirement>
+        <requirement type="package" version="39.08">bbmap</requirement>
+        <requirement type="package" version="0.3.8">mosdepth</requirement>
+        <requirement type="package" version="2.31.1">bedtools</requirement>
+        <requirement type="package" version="1.20">htslib</requirement>
     </requirements>
     
     <version_command>ssiamb --version</version_command>

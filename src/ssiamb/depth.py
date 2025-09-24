@@ -11,10 +11,11 @@ This module provides functionality for:
 import subprocess
 import logging
 from pathlib import Path
-from typing import List, Set
+from typing import List, Set, Optional
 from dataclasses import dataclass
 
 from .tool_config import get_tool_path
+from .config import get_config
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,10 @@ class ContigDepthStats:
 
     @property
     def is_long_enough(self) -> bool:
-        """Check if contig meets minimum length threshold (≥500 bp)."""
-        return self.length >= 500
+        """Check if contig meets minimum length threshold."""
+        config = get_config()
+        min_length: int = config.get_depth_setting("min_contig_length", 500)
+        return self.length >= min_length
 
 
 @dataclass
@@ -75,7 +78,10 @@ def check_mosdepth_available() -> bool:
 
 
 def run_mosdepth(
-    bam_path: Path, output_prefix: Path, mapq_threshold: int = 30, threads: int = 4
+    bam_path: Path,
+    output_prefix: Path,
+    mapq_threshold: Optional[int] = None,
+    threads: Optional[int] = None,
 ) -> Path:
     """
     Run mosdepth on a BAM file to compute depth statistics.
@@ -83,8 +89,8 @@ def run_mosdepth(
     Args:
         bam_path: Path to input BAM file
         output_prefix: Output prefix for mosdepth files
-        mapq_threshold: Minimum mapping quality (default: 30)
-        threads: Number of threads to use
+        mapq_threshold: Minimum mapping quality (uses config default if None)
+        threads: Number of threads to use (uses config default if None)
 
     Returns:
         Path to the generated summary file (.mosdepth.summary.txt)
@@ -93,6 +99,12 @@ def run_mosdepth(
         DepthAnalysisError: If mosdepth is not available or execution fails
         FileNotFoundError: If BAM file doesn't exist
     """
+    # Get config defaults if parameters not provided
+    config = get_config()
+    if mapq_threshold is None:
+        mapq_threshold = config.get_depth_setting("default_mapq_threshold", 30)
+    if threads is None:
+        threads = config.get_depth_setting("default_threads", 4)
     if not bam_path.exists():
         raise FileNotFoundError(f"BAM file not found: {bam_path}")
 

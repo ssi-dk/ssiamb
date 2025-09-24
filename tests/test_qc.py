@@ -22,21 +22,48 @@ class TestQCThresholds:
 
     def test_default_thresholds(self):
         """Test default QC threshold values."""
-        thresholds = QCThresholds()
+        thresholds = QCThresholds.from_config()
         assert thresholds.min_breadth_10x == 0.80
         assert thresholds.min_callable_bases == 1_000_000
         assert thresholds.min_mapping_rate_ref == 0.70
 
     def test_custom_thresholds(self):
         """Test custom QC threshold configuration."""
-        thresholds = QCThresholds(
-            min_breadth_10x=0.90,
-            min_callable_bases=2_000_000,
-            min_mapping_rate_ref=0.80,
+        from src.ssiamb.config import SsiambConfig, set_config
+
+        config = SsiambConfig(
+            thresholds={},
+            qc={
+                "min_breadth_10x": 0.90,
+                "min_callable_bases": 2_000_000,
+                "min_mapping_rate_ref": 0.80,
+            },
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
+            species_aliases={},
+            tools={},
+            output={},
         )
-        assert thresholds.min_breadth_10x == 0.90
-        assert thresholds.min_callable_bases == 2_000_000
-        assert thresholds.min_mapping_rate_ref == 0.80
+
+        # Temporarily set the config for this test
+        original_config = None
+        try:
+            import src.ssiamb.config
+
+            original_config = src.ssiamb.config._config
+            set_config(config)
+
+            thresholds = QCThresholds.from_config()
+            assert thresholds.min_breadth_10x == 0.90
+            assert thresholds.min_callable_bases == 2_000_000
+            assert thresholds.min_mapping_rate_ref == 0.80
+
+        finally:
+            # Restore original config
+            src.ssiamb.config._config = original_config
 
 
 class TestQCWarning:
@@ -160,25 +187,52 @@ class TestQCMetricChecking:
 
     def test_custom_thresholds(self):
         """Test QC checking with custom thresholds."""
-        custom_thresholds = QCThresholds(
-            min_breadth_10x=0.90,
-            min_callable_bases=2_000_000,
-            min_mapping_rate_ref=0.80,
+        from src.ssiamb.config import SsiambConfig, set_config
+
+        config = SsiambConfig(
+            thresholds={},
+            qc={
+                "min_breadth_10x": 0.90,
+                "min_callable_bases": 2_000_000,
+                "min_mapping_rate_ref": 0.80,
+            },
+            depth={},
+            vcf={},
+            refseq={},
+            calling={},
+            resources={},
+            species_aliases={},
+            tools={},
+            output={},
         )
 
-        warnings = check_qc_metrics(
-            breadth_10x=0.85,  # Would be OK with default, but low with custom
-            callable_bases=1_500_000,  # Would be OK with default, but low with custom
-            mapping_rate=0.75,  # Would be OK with default, but low with custom
-            mode=Mode.REF,
-            thresholds=custom_thresholds,
-        )
+        # Temporarily set the config for this test
+        original_config = None
+        try:
+            import src.ssiamb.config
 
-        assert len(warnings) == 3
+            original_config = src.ssiamb.config._config
+            set_config(config)
 
-        # Check that custom thresholds are used
-        breadth_warning = next(w for w in warnings if w.metric == "breadth_10x")
-        assert breadth_warning.threshold == 0.90
+            custom_thresholds = QCThresholds.from_config()
+
+            warnings = check_qc_metrics(
+                breadth_10x=0.85,  # Would be OK with default, but low with custom
+                callable_bases=1_500_000,  # Would be OK with default, but low with custom
+                mapping_rate=0.75,  # Would be OK with default, but low with custom
+                mode=Mode.REF,
+                thresholds=custom_thresholds,
+            )
+
+            assert len(warnings) == 3
+
+            # Check that custom thresholds are used
+            breadth_warning = next(w for w in warnings if w.metric == "breadth_10x")
+            assert breadth_warning.threshold == 0.90
+
+        finally:
+            # Restore original config
+            src.ssiamb.config._config = original_config
 
 
 class TestQCWarningFormatting:

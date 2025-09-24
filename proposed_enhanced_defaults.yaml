@@ -1,5 +1,5 @@
-# Default configuration for ssiamb
-# This file contains all configurable values that were previously hardcoded
+# Enhanced ssiamb configuration with all configurable parameters
+# This extends the existing defaults.yaml with additional hard-coded values
 
 # Analysis thresholds for ambiguous site detection
 thresholds:
@@ -39,20 +39,11 @@ refseq:
 calling:
   default_threads: 1            # Default thread count for variant calling
   default_mapq_min: 20          # Default minimum mapping quality
-  default_baseq_min: 20         # Default minimum base quality
+  default_baseq_min: 20         # Default minimum base quality  
   default_minallelefraction: 0.0 # Default minimum allele fraction
   ploidy: 1                     # Organism ploidy (1 = haploid)
 
-# Resource management
-resources:
-  default_threads: 4            # Default thread count when not specified
-  default_memory: "16g"         # Default memory allocation (as per spec.md §14)
-  timeout_short: 30             # Short operation timeout (seconds)
-  timeout_long: 300             # Long operation timeout (seconds)
-  walltime_hint: "2h"           # Default walltime hint for Galaxy
-
 # Species name aliases for reference resolution
-# Maps user-friendly names to canonical names or different species
 species_aliases:
   # Common Shigella -> E. coli mappings
   "Shigella sonnei": "Escherichia coli"
@@ -73,41 +64,49 @@ species_aliases:
 # Tool-specific configuration
 tools:
   minimap2:
-    preset: "sr"          # Short read preset
-    extra_args: []        # Additional arguments
+    preset: "sr"              # Short read preset
+    extra_args: []            # Additional arguments
     
   bwa-mem2:
-    extra_args: []        # Additional arguments
+    extra_args: []            # Additional arguments
     
   bbtools:
     variant_caller: "callvariants.sh"
     extra_args: []
-    heap_floor: "4g"              # Minimum heap memory (floor)
-    heap_cap: "64g"               # Maximum heap memory (cap)
-    heap_percent: 0.8             # Percent of detected RAM to use (~80%)
+    heap_floor: "4g"          # Minimum heap memory (floor)
+    heap_cap: "64g"           # Maximum heap memory (cap)
+    heap_percent: 0.8         # Percent of detected RAM to use (~80%)
     
   bcftools:
     mpileup_args: ["-d", "1000"]
     call_args: ["-mv"]
-    version_timeout: 5            # Timeout for version check
+    version_timeout: 5        # Timeout for version check
     
   mosdepth:
-    window_size: 500      # Window size for depth calculation
+    window_size: 500          # Window size for depth calculation
     extra_args: []
     
   samtools:
-    depth_args: ["-a"]    # Include all positions
+    depth_args: ["-a"]        # Include all positions
 
 # Output formatting options
 output:
   tsv:
-    float_precision: 3    # Decimal places for float values
+    float_precision: 3        # Decimal places for float values
     
   json:
-    indent: 2             # JSON indentation
+    indent: 2                 # JSON indentation
     
   vcf:
-    include_filters: true # Include FILTER field info
+    include_filters: true     # Include FILTER field info
     
   bed:
     track_name: "ambiguous_sites"  # Track name for BED files
+
+# Resource management
+resources:
+  default_threads: 4          # Default thread count when not specified
+  default_memory: "16g"       # Default memory allocation (as per spec.md §14)
+  timeout_short: 30           # Short operation timeout (seconds)
+  timeout_long: 300           # Long operation timeout (seconds)
+  walltime_hint: "2h"         # Default walltime hint for Galaxy
