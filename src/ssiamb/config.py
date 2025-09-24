@@ -100,6 +100,8 @@ class SsiambConfig:
     def _load_defaults() -> Dict[str, Any]:
         """Load built-in default configuration."""
         defaults_path = Path(__file__).parent / "config" / "defaults.yaml"
+        tools_path = Path(__file__).parent / "config" / "tools.yaml"
+
         if not defaults_path.exists():
             # Fallback to minimal defaults if file doesn't exist
             return {
@@ -150,7 +152,18 @@ class SsiambConfig:
                 "tools": {},
                 "output": {},
             }
-        return SsiambConfig._load_yaml(defaults_path)
+
+        # Load main defaults
+        config = SsiambConfig._load_yaml(defaults_path)
+
+        # Load and merge tools configuration if it exists
+        if tools_path.exists():
+            tools_config = SsiambConfig._load_yaml(tools_path)
+            config["tools"] = tools_config
+        else:
+            config["tools"] = {}
+
+        return config
 
     @staticmethod
     def _load_yaml(path: Path) -> Dict[str, Any]:

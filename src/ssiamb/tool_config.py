@@ -114,8 +114,21 @@ class ToolConfig:
         if tool_name not in self.DEFAULT_TOOLS:
             return None
 
-        # Get user-configured path (empty string means auto-detect)
-        user_path = self.config["tools"].get(tool_name, "")
+        # Get tool configuration (could be string or dict)
+        tool_config = self.config["tools"].get(tool_name, "")
+
+        # Handle legacy string format and new dict format
+        if isinstance(tool_config, dict):
+            # New format: look for 'path' key, or special keys for bbtools
+            if tool_name == "callvariants.sh":
+                user_path = tool_config.get("callvariants_path", "")
+            elif tool_name == "pileup.sh":
+                user_path = tool_config.get("pileup_path", "")
+            else:
+                user_path = tool_config.get("path", "")
+        else:
+            # Legacy string format
+            user_path = str(tool_config) if tool_config else ""
 
         # If user has configured a specific path, use it
         if user_path and user_path.strip():
@@ -164,10 +177,38 @@ class ToolConfig:
         except FileNotFoundError:
             raise ValueError(f"Tool cannot be executed: {path}")
 
-        # Update configuration
-        self.config["tools"][tool_name] = str(tool_path)
-        self.save_config()
+        # Update configuration - handle both legacy and new format
+        if isinstance(self.config["tools"].get(tool_name), dict):
+            # New format: update the appropriate path key
+            if tool_name == "callvariants.sh":
+                self.config["tools"][tool_name]["callvariants_path"] = str(tool_path)
+            elif tool_name == "pileup.sh":
+                self.config["tools"][tool_name]["pileup_path"] = str(tool_path)
+            else:
+                self.config["tools"][tool_name]["path"] = str(tool_path)
+        else:
+            # Legacy format or create new dict format
+            if tool_name in ["callvariants.sh", "pileup.sh"]:
+                # Create dict format for bbtools
+                if tool_name not in self.config["tools"] or not isinstance(
+                    self.config["tools"][tool_name], dict
+                ):
+                    self.config["tools"][tool_name] = {}
+                if tool_name == "callvariants.sh":
+                    self.config["tools"][tool_name]["callvariants_path"] = str(
+                        tool_path
+                    )
+                else:
+                    self.config["tools"][tool_name]["pileup_path"] = str(tool_path)
+            else:
+                # Create dict format for other tools
+                if tool_name not in self.config["tools"] or not isinstance(
+                    self.config["tools"][tool_name], dict
+                ):
+                    self.config["tools"][tool_name] = {}
+                self.config["tools"][tool_name]["path"] = str(tool_path)
 
+        self.save_config()
         console.print(f"[green]✓[/green] Set {tool_name} path to: {path}")
 
     def reset_tool_config(self, tool_name: Optional[str] = None) -> None:
@@ -176,12 +217,29 @@ class ToolConfig:
             if tool_name not in self.DEFAULT_TOOLS:
                 raise ValueError(f"Unknown tool: {tool_name}")
 
-            self.config["tools"][tool_name] = ""
+            # Reset path in tool config while preserving other parameters
+            if isinstance(self.config["tools"].get(tool_name), dict):
+                if tool_name == "callvariants.sh":
+                    self.config["tools"][tool_name]["callvariants_path"] = ""
+                elif tool_name == "pileup.sh":
+                    self.config["tools"][tool_name]["pileup_path"] = ""
+                else:
+                    self.config["tools"][tool_name]["path"] = ""
+            else:
+                self.config["tools"][tool_name] = ""
             console.print(f"[green]✓[/green] Reset {tool_name} to auto-detection")
         else:
             # Reset all tools
             for tool in self.DEFAULT_TOOLS:
-                self.config["tools"][tool] = ""
+                if isinstance(self.config["tools"].get(tool), dict):
+                    if tool == "callvariants.sh":
+                        self.config["tools"][tool]["callvariants_path"] = ""
+                    elif tool == "pileup.sh":
+                        self.config["tools"][tool]["pileup_path"] = ""
+                    else:
+                        self.config["tools"][tool]["path"] = ""
+                else:
+                    self.config["tools"][tool] = ""
             console.print("[green]✓[/green] Reset all tools to auto-detection")
 
         self.save_config()

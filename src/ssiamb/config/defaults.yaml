@@ -70,34 +70,6 @@ species_aliases:
   "Salmonella enterica subsp. enterica": "Salmonella enterica"
   "Campylobacter jejuni subsp. jejuni": "Campylobacter jejuni"
 
-# Tool-specific configuration
-tools:
-  minimap2:
-    preset: "sr"          # Short read preset
-    extra_args: []        # Additional arguments
-    
-  bwa-mem2:
-    extra_args: []        # Additional arguments
-    
-  bbtools:
-    variant_caller: "callvariants.sh"
-    extra_args: []
-    heap_floor: "4g"              # Minimum heap memory (floor)
-    heap_cap: "64g"               # Maximum heap memory (cap)
-    heap_percent: 0.8             # Percent of detected RAM to use (~80%)
-    
-  bcftools:
-    mpileup_args: ["-d", "1000"]
-    call_args: ["-mv"]
-    version_timeout: 5            # Timeout for version check
-    
-  mosdepth:
-    window_size: 500      # Window size for depth calculation
-    extra_args: []
-    
-  samtools:
-    depth_args: ["-a"]    # Include all positions
-
 # Output formatting options
 output:
   tsv:

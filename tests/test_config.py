@@ -38,14 +38,23 @@ class TestSsiambConfig:
         defaults_content = {
             "thresholds": {"dp_min": 15, "maf_min": 0.05, "dp_cap": 150},
             "species_aliases": {"ecoli": "Escherichia coli"},
-            "tools": {"minimap2": {"threads": 8}},
         }
 
+        tools_content = {"minimap2": {"path": "", "preset": "sr", "threads": 8}}
+
+        def mock_exists():
+            return True  # Both files exist
+
+        def mock_load_yaml(path):
+            if "tools.yaml" in str(path):
+                return tools_content
+            else:
+                return defaults_content
+
         with (
-            patch("src.ssiamb.config.Path.exists", return_value=True),
+            patch("src.ssiamb.config.Path.exists", side_effect=mock_exists),
             patch(
-                "src.ssiamb.config.SsiambConfig._load_yaml",
-                return_value=defaults_content,
+                "src.ssiamb.config.SsiambConfig._load_yaml", side_effect=mock_load_yaml
             ),
         ):
             config = SsiambConfig._load_defaults()
