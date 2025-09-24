@@ -150,6 +150,8 @@ class TestCallingRealData:
         self, pre_mapped_bam_path, real_reference_path
     ):
         """Test bcftools variant calling with pre-mapped BAM."""
+        import gzip
+
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
 
@@ -181,13 +183,18 @@ class TestCallingRealData:
             assert result.vcf_path.stat().st_size > 0, "Output VCF should not be empty"
             assert result.caller == Caller.BCFTOOLS, "Result should have correct caller"
 
-            # Check VCF format (basic validation)
-            with open(result.vcf_path) as f:
-                content = f.read()
-                assert content.startswith(
-                    "##fileformat=VCF"
-                ), "VCF should have proper header"
-                assert "#CHROM" in content, "VCF should have column headers"
+            # Check VCF format (basic validation) - handle gzipped output
+            if str(result.vcf_path).endswith(".gz"):
+                with gzip.open(result.vcf_path, "rt") as f:
+                    content = f.read()
+            else:
+                with open(result.vcf_path) as f:
+                    content = f.read()
+
+            assert content.startswith(
+                "##fileformat=VCF"
+            ), "VCF should have proper header"
+            assert "#CHROM" in content, "VCF should have column headers"
 
             # Calling should complete in reasonable time
             assert (
@@ -296,10 +303,19 @@ class TestCallingRealData:
                 # Count variants (rough estimate)
                 variant_count = 0
                 if result.success and result.vcf_path.exists():
-                    with open(result.vcf_path) as f:
-                        for line in f:
-                            if not line.startswith("#") and line.strip():
-                                variant_count += 1
+                    # Handle both gzipped and plain VCF files
+                    if str(result.vcf_path).endswith(".gz"):
+                        import gzip
+
+                        with gzip.open(result.vcf_path, "rt") as f:
+                            for line in f:
+                                if not line.startswith("#") and line.strip():
+                                    variant_count += 1
+                    else:
+                        with open(result.vcf_path) as f:
+                            for line in f:
+                                if not line.startswith("#") and line.strip():
+                                    variant_count += 1
 
                 results[caller.value] = {
                     "success": result.success,

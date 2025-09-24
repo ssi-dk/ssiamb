@@ -285,26 +285,30 @@ def run_bbtools_calling(
         )
 
 
-def run_bcftools_calling(
+def run_bcftools_pileup(
     bam_path: Path,
     reference_path: Path,
     output_vcf: Path,
     sample_name: str,
-    threads: int = 1,
-    mapq_min: int = 20,
-    baseq_min: int = 20,
+    threads: Optional[int] = None,
+    mapq_min: Optional[int] = None,
+    baseq_min: Optional[int] = None,
 ) -> VariantCallResult:
     """
-    Run bcftools variant calling pipeline.
+    Run BCFtools pileup generation pipeline.
 
     Executes:
     1. bcftools mpileup -q20 -Q20 -B -a AD,ADF,ADR,DP
-    2. bcftools call -m --ploidy 1
+    2. bcftools view -Ou (keeps all sites, not just variants)
+    3. bcftools norm -f <ref> -m -both --atomize -Oz (normalize and compress)
+
+    This creates candidate sites (pileup) rather than called variants,
+    suitable for downstream ambiguous site detection.
 
     Args:
         bam_path: Input BAM file
         reference_path: Reference genome FASTA
-        output_vcf: Output VCF file path
+        output_vcf: Output VCF file path (will be .pileup.vcf.gz)
         sample_name: Sample name for VCF header
         threads: Number of threads to use
         mapq_min: Minimum mapping quality
@@ -320,6 +324,12 @@ def run_bcftools_calling(
     try:
         # Ensure output directory exists
         output_vcf.parent.mkdir(parents=True, exist_ok=True)
+
+        # Convert output to .pileup.vcf.gz naming convention
+        if not str(output_vcf).endswith(".pileup.vcf.gz"):
+            pileup_vcf = output_vcf.with_suffix(".pileup.vcf.gz")
+        else:
+            pileup_vcf = output_vcf
 
         # Get BCFtools configuration
         config = get_config()
@@ -374,58 +384,74 @@ def run_bcftools_calling(
             ]
         )
 
-        # Build call command using configuration
-        call_cmd = [bcftools_path, "call"]
-        call_cmd.extend(["--threads", str(threads)])
+        # Build view command using configuration (replaces call)
+        view_cmd = [bcftools_path, "view"]
+        view_cmd.extend(["--threads", str(threads)])
 
-        # Add multiallelic caller if configured
-        if bcftools_config.get("multiallelic_caller", True):
-            call_cmd.append("-m")
+        # Add view output type from config
+        view_output_type = bcftools_config.get("view_output_type", "-Ou")
+        view_cmd.append(view_output_type)
 
-        # Add ploidy from config
-        ploidy = bcftools_config.get("ploidy", 1)
-        call_cmd.extend(["--ploidy", str(ploidy)])
+        # Add view args from config
+        view_args = bcftools_config.get("view_args", [])
+        view_cmd.extend(view_args)
 
-        # Add prior mutation rate from config
-        prior_rate = bcftools_config.get("prior_mutation_rate", "1.1e-3")
-        call_cmd.extend(["--prior", str(prior_rate)])
+        # Add extra view args from config
+        view_extra_args = bcftools_config.get("view_extra_args", [])
+        view_cmd.extend(view_extra_args)
 
-        # Add existing call args from config
-        call_args = bcftools_config.get("call_args", [])
-        call_cmd.extend(call_args)
+        # Build norm command using configuration
+        norm_cmd = [bcftools_path, "norm"]
+        norm_cmd.extend(["--threads", str(threads)])
 
-        # Add extra call args from config
-        call_extra_args = bcftools_config.get("call_extra_args", [])
-        call_cmd.extend(call_extra_args)
+        # Add reference for normalization
+        norm_cmd.extend(["-f", str(reference_path)])
 
-        # Add output arguments
-        call_cmd.extend(
-            [
-                "-v",  # Output only variants
-                "-o",
-                str(output_vcf),  # Output file
-            ]
-        )
+        # Add norm args from config
+        norm_args = bcftools_config.get("norm_args", ["-m", "-both", "--atomize"])
+        norm_cmd.extend(norm_args)
+
+        # Add norm output type from config
+        norm_output_type = bcftools_config.get("norm_output_type", "-Oz")
+        norm_cmd.append(norm_output_type)
+
+        # Add output file
+        norm_cmd.extend(["-o", str(pileup_vcf)])
+
+        # Add extra norm args from config
+        norm_extra_args = bcftools_config.get("norm_extra_args", [])
+        norm_cmd.extend(norm_extra_args)
 
         logger.info(
-            f"Running bcftools pipeline: {' '.join(mpileup_cmd)} | {' '.join(call_cmd)}"
+            f"Running bcftools pileup pipeline: {' '.join(mpileup_cmd)} | {' '.join(view_cmd)} | {' '.join(norm_cmd)}"
         )
 
-        # Run mpileup | call pipeline
+        # Run mpileup | view | norm pipeline
         mpileup_proc = subprocess.Popen(
             mpileup_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
 
-        call_proc = subprocess.Popen(
-            call_cmd, stdin=mpileup_proc.stdout, stderr=subprocess.PIPE, text=True
+        view_proc = subprocess.Popen(
+            view_cmd,
+            stdin=mpileup_proc.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
 
-        # Close mpileup stdout to allow it to receive SIGPIPE
+        norm_proc = subprocess.Popen(
+            norm_cmd, stdin=view_proc.stdout, stderr=subprocess.PIPE, text=True
+        )
+
+        # Close upstream stdout to allow SIGPIPE
         if mpileup_proc.stdout:
             mpileup_proc.stdout.close()
+        if view_proc.stdout:
+            view_proc.stdout.close()
 
-        # Wait for both processes
-        call_stderr = call_proc.communicate()[1]
+        # Wait for all processes
+        norm_stderr = norm_proc.communicate()[1]
+        view_stderr = view_proc.communicate()[1]
         mpileup_stderr = mpileup_proc.communicate()[1]
 
         # Check return codes
@@ -433,20 +459,33 @@ def run_bcftools_calling(
             error_msg = f"bcftools mpileup failed (exit {mpileup_proc.returncode}): {mpileup_stderr}"
             logger.error(error_msg)
             return VariantCallResult(
-                vcf_path=output_vcf,
+                vcf_path=pileup_vcf,
                 caller=Caller.BCFTOOLS,
                 success=False,
                 error_message=error_msg,
                 runtime_seconds=time.time() - start_time,
             )
 
-        if call_proc.returncode != 0:
+        if view_proc.returncode != 0:
             error_msg = (
-                f"bcftools call failed (exit {call_proc.returncode}): {call_stderr}"
+                f"bcftools view failed (exit {view_proc.returncode}): {view_stderr}"
             )
             logger.error(error_msg)
             return VariantCallResult(
-                vcf_path=output_vcf,
+                vcf_path=pileup_vcf,
+                caller=Caller.BCFTOOLS,
+                success=False,
+                error_message=error_msg,
+                runtime_seconds=time.time() - start_time,
+            )
+
+        if norm_proc.returncode != 0:
+            error_msg = (
+                f"bcftools norm failed (exit {norm_proc.returncode}): {norm_stderr}"
+            )
+            logger.error(error_msg)
+            return VariantCallResult(
+                vcf_path=pileup_vcf,
                 caller=Caller.BCFTOOLS,
                 success=False,
                 error_message=error_msg,
@@ -454,27 +493,27 @@ def run_bcftools_calling(
             )
 
         # Verify output VCF was created
-        if not output_vcf.exists():
-            error_msg = "bcftools call completed but no VCF output found"
+        if not pileup_vcf.exists():
+            error_msg = "bcftools norm completed but no VCF output found"
             logger.error(error_msg)
             return VariantCallResult(
-                vcf_path=output_vcf,
+                vcf_path=pileup_vcf,
                 caller=Caller.BCFTOOLS,
                 success=False,
                 error_message=error_msg,
                 runtime_seconds=time.time() - start_time,
             )
 
-        logger.info(f"bcftools variant calling completed: {output_vcf}")
+        logger.info(f"bcftools pileup generation completed: {pileup_vcf}")
         return VariantCallResult(
-            vcf_path=output_vcf,
+            vcf_path=pileup_vcf,
             caller=Caller.BCFTOOLS,
             success=True,
             runtime_seconds=time.time() - start_time,
         )
 
     except Exception as e:
-        error_msg = f"bcftools variant calling failed with exception: {e}"
+        error_msg = f"bcftools pileup generation failed with exception: {e}"
         logger.error(error_msg)
         return VariantCallResult(
             vcf_path=output_vcf,
@@ -544,7 +583,7 @@ def call_variants(
             bbtools_mem=bbtools_mem,
         )
     elif caller == Caller.BCFTOOLS:
-        result = run_bcftools_calling(
+        result = run_bcftools_pileup(
             bam_path=bam_path,
             reference_path=reference_path,
             output_vcf=output_vcf,

@@ -23,24 +23,26 @@ bbtools:
   heap_cap: "64g"       # Maximum heap memory (cap)
   heap_percent: 0.8     # Percent of detected RAM to use (~80%)
 
-# BCFtools variant calling
+# BCFtools pileup and normalization workflow
 bcftools:
   path: ''              # Tool path (empty = auto-detect from PATH)
   mpileup_args: ["-d", "1000"]  # mpileup-specific arguments
-  call_args: ["-mv"]            # call-specific arguments
   version_timeout: 5            # Timeout for version check (seconds)
   # Additional mpileup parameters
   mpileup_output_type: "-Ou"   # Uncompressed BCF output for piping
   disable_baq: true             # Disable BAQ computation (-B flag)
   max_depth: 100000             # Maximum depth for mpileup
   annotations: "FORMAT/AD,ADF,ADR,DP"  # Format annotations to include
-  # Additional call parameters
-  multiallelic_caller: true     # Use multiallelic caller (-m flag)
-  ploidy: 1                     # Organism ploidy level
-  prior_mutation_rate: "1.1e-3" # Prior for novel mutation rate
+  # View parameters (replaces call)
+  view_args: []                 # view-specific arguments
+  view_output_type: "-Ou"       # Uncompressed BCF output for piping to norm
+  # Normalization parameters
+  norm_args: ["-m", "-both", "--atomize"]  # Split multiallelics and normalize
+  norm_output_type: "-Oz"       # Compressed VCF output
   # General extra arguments
   mpileup_extra_args: []        # Additional mpileup command-line arguments
-  call_extra_args: []           # Additional call command-line arguments
+  view_extra_args: []           # Additional view command-line arguments
+  norm_extra_args: []           # Additional norm command-line arguments
 
 # BGzip compression tool
 bgzip:

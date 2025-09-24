@@ -478,7 +478,7 @@ def run_self(plan: RunPlan) -> SummaryRow:
         print(f"    2. Ensure/build {plan.mapper.value} indexes for assembly")
         print(f"    3. Map reads to assembly → {plan.sample}.sorted.bam")
         print(f"    4. Run depth analysis → {plan.sample}.depth.mosdepth.summary.txt")
-        print(f"    5. Call variants → {plan.sample}.vcf")
+        print(f"    5. Call variants → {plan.sample}.pileup.vcf.gz")
         print(f"    6. Normalize/split VCF → {plan.sample}.normalized.vcf.gz")
         print("    7. Count ambiguous sites and generate summary")
         if plan.emit_vcf:
@@ -617,9 +617,9 @@ def run_self(plan: RunPlan) -> SummaryRow:
             assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
             assert plan.thresholds.baseq_min is not None, "baseq_min threshold not set"
 
-            vcf_path = plan.paths.output_dir / f"{plan.sample}.vcf"
+            vcf_path = plan.paths.output_dir / f"{plan.sample}.pileup.vcf.gz"
             variant_result = call_variants(
-                bam_path=bam_path,  # Use original BAM for variant calling (not markdup)
+                bam_path=final_bam_path,  # Use markdup BAM for both depth and calling
                 reference_path=plan.paths.assembly,
                 output_vcf=vcf_path,
                 caller=plan.caller,
@@ -1100,7 +1100,7 @@ def run_ref(
         )
         print(f"    3. Map reads to reference → {plan.sample}.sorted.bam")
         print(f"    4. Run depth analysis → {plan.sample}.depth.mosdepth.summary.txt")
-        print(f"    5. Call variants → {plan.sample}.vcf")
+        print(f"    5. Call variants → {plan.sample}.pileup.vcf.gz")
         print(f"    6. Normalize/split VCF → {plan.sample}.normalized.vcf.gz")
         print("    7. Count ambiguous sites and generate summary")
         if plan.emit_vcf:
@@ -1273,9 +1273,9 @@ def run_ref(
             assert plan.thresholds.mapq_min is not None, "mapq_min threshold not set"
             assert plan.thresholds.baseq_min is not None, "baseq_min threshold not set"
 
-            vcf_path = plan.paths.output_dir / f"{plan.sample}.vcf"
+            vcf_path = plan.paths.output_dir / f"{plan.sample}.pileup.vcf.gz"
             variant_result = call_variants(
-                bam_path=bam_path,
+                bam_path=final_bam_path,  # Use markdup BAM for both depth and calling
                 reference_path=reference_path,
                 output_vcf=vcf_path,
                 caller=plan.caller,

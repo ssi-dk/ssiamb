@@ -111,7 +111,17 @@ def normalize_and_split(
         output_dir = vcf_in.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    normalized_vcf = output_dir / f"{vcf_in.stem}.normalized.vcf.gz"
+    # Handle .pileup.vcf.gz input files properly
+    if vcf_in.name.endswith(".pileup.vcf.gz"):
+        base_name = vcf_in.name.replace(".pileup.vcf.gz", "")
+    elif vcf_in.name.endswith(".vcf.gz"):
+        base_name = vcf_in.name.replace(".vcf.gz", "")
+    elif vcf_in.name.endswith(".vcf"):
+        base_name = vcf_in.name.replace(".vcf", "")
+    else:
+        base_name = vcf_in.stem
+
+    normalized_vcf = output_dir / f"{base_name}.normalized.vcf.gz"
 
     try:
         # Build bcftools norm command
