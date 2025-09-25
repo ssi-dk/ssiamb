@@ -693,13 +693,19 @@ def emit_vcf(
                             new_record.filter.clear()
                             new_record.filter.add("PASS")
 
-                            # Copy FORMAT fields
+                            # Copy FORMAT fields (with error handling for complex formats)
                             for sample_id in record.samples:
                                 sample_name = str(sample_id)
                                 for key in record.format:
-                                    new_record.samples[sample_name][key] = (
-                                        record.samples[sample_id][key]
-                                    )
+                                    try:
+                                        value = record.samples[sample_id][key]
+                                        new_record.samples[sample_name][key] = value
+                                    except (TypeError, ValueError) as e:
+                                        # Skip problematic FORMAT fields with a warning
+                                        logger.warning(
+                                            f"Skipping FORMAT field {key} for {record.chrom}:{record.pos}: {e}"
+                                        )
+                                        continue
 
                             output_vcf.write(new_record)
                             records_written += 1

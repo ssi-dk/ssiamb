@@ -21,6 +21,25 @@ An ambiguous site is a genomic position with:
 
 These metrics are determined from variant calls after normalization and atomization, counting **once per locus** (multi-allelic sites count once if any ALT passes the thresholds).
 
+### Variant Calling and Filtering Strategy
+
+`ssiamb` uses a two-stage approach to ensure comprehensive and consistent variant detection:
+
+#### 1. Variant Calling (Capture All Variants)
+
+- **BBTools**: Configured with `minallelefraction=0.0` to capture all variant calls regardless of frequency
+- **BCFtools**: Configured without MAF filtering during the calling stage to capture all variants
+- **Rationale**: Ensures no potentially relevant variants are lost during the calling process
+
+#### 2. Analysis-Time Filtering (Apply Thresholds)
+
+- **MAF Threshold**: The `--maf-min` parameter (default: 0.10) is applied during analysis, not during variant calling
+- **Post-calling Filter**: All filtering for ambiguous site detection happens after variant calls are made
+- **Consistency**: Both callers use the same filtering approach, ensuring comparable results
+- **Flexibility**: Allows reanalysis of the same variant calls with different thresholds using `ssiamb summarize`
+
+This approach maximizes sensitivity during variant detection while maintaining analytical flexibility and ensuring reproducible results across different caller technologies.
+
 ### Supported Modes
 
 #### Self-mapping Mode (`ssiamb self`)
@@ -389,7 +408,7 @@ results/
 | `--outdir` | `.` | Output directory |
 | `--sample` | *inferred* | Sample name (required if auto-inference fails) |
 | `--dp-min` | `10` | Minimum depth for ambiguous sites |
-| `--maf-min` | `0.1` | Minimum minor allele frequency |
+| `--maf-min` | `0.1` | Minimum minor allele frequency (post-calling filter) |
 | `--dp-cap` | `100` | Maximum depth cap (clipped to 100) |
 | `--mapper` | `minimap2` | Alignment tool (`minimap2`, `bwa-mem2`) |
 | `--caller` | `bbtools` | Variant caller (`bbtools`, `bcftools`) |
