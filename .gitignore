@@ -119,14 +119,7 @@ conda-bld/
 # -------------------------------
 # LLM agent local notes (do not commit)
 # -------------------------------
-LLM_PRIMER.md
-AGENT_RULES.md
-KICKOFF_PROMPT_TEMPLATE.txt
-SESSION_START_CHECKLIST.md
-CONTEXT_FILES.md
-prompt_plan.md
-spec.md
-todo.md
+LLM/
 
 # -------------------------------
 # Re-include tiny fixtures for tests/docs
