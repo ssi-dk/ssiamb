@@ -124,25 +124,45 @@ def normalize_and_split(
     normalized_vcf = output_dir / f"{base_name}.normalized.vcf.gz"
 
     try:
-        # Build bcftools norm command
+        # Get VCF normalization configuration
+        config = get_config()
+        norm_config = config.tools.get("vcf_normalization", {})
+
+        # Build bcftools norm command using configuration
         bcftools_path = get_tool_path("bcftools")
         cmd = [
             bcftools_path,
             "norm",
             "-f",
             str(reference),
-            "-m",
-            "-both",
-            "--atomize",
-            "-cw",  # Check REF alleles and warn about issues (instead of error)
-            "-d",
-            "exact",  # Remove exact duplicates (replaces deprecated -D)
-            "-O",
-            "z",  # Compress output
-            "-o",
-            str(normalized_vcf),
-            str(vcf_in),
         ]
+
+        # Add multiallelic splitting from config
+        split_args = norm_config.get("split_multiallelic", ["-m", "-both"])
+        cmd.extend(split_args)
+
+        # Add atomize flag if configured
+        if norm_config.get("atomize", True):
+            cmd.append("--atomize")
+
+        # Add REF check mode from config
+        check_ref = norm_config.get("check_ref", "w")
+        cmd.extend(["-c", check_ref])
+
+        # Add duplicate removal from config
+        remove_dups = norm_config.get("remove_duplicates", "exact")
+        cmd.extend(["-d", remove_dups])
+
+        # Add output type from config
+        output_type = norm_config.get("output_type", "-Oz")
+        cmd.extend(["-O", output_type.replace("-O", "")])  # Remove -O prefix if present
+
+        # Add extra args from config
+        extra_args = norm_config.get("extra_args", [])
+        cmd.extend(extra_args)
+
+        # Add output file and input file
+        cmd.extend(["-o", str(normalized_vcf), str(vcf_in)])
 
         logger.debug(f"Running bcftools norm: {' '.join(cmd)}")
 

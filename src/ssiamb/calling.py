@@ -176,14 +176,22 @@ def run_bbtools_calling(
     """
     import time
 
-    # Get config defaults for None parameters
+    # Get config defaults for None parameters, but only if clearfilters is not active
     config = get_config()
+    bbtools_config = config.tools.get("bbtools", {})
+    clearfilters_enabled = bbtools_config.get("clearfilters", False)
+
     if threads is None:
         threads = config.get_calling_setting("default_threads", 1)
-    if mapq_min is None:
-        mapq_min = config.get_calling_setting("default_mapq_min", 20)
-    if baseq_min is None:
-        baseq_min = config.get_calling_setting("default_baseq_min", 20)
+
+    # If clearfilters is on, we want mapq/baseq to be None so they can be set to 0 later
+    # Otherwise, if they are None, set them to their default values.
+    if not clearfilters_enabled:
+        if mapq_min is None:
+            mapq_min = config.get_calling_setting("default_mapq_min", 20)
+        if baseq_min is None:
+            baseq_min = config.get_calling_setting("default_baseq_min", 20)
+
     if minallelefraction is None:
         minallelefraction = config.get_calling_setting("default_minallelefraction", 0.0)
 
@@ -195,18 +203,60 @@ def run_bbtools_calling(
 
         # Run callvariants.sh directly with BAM input (simpler approach)
         callvariants_path = get_tool_path("callvariants.sh")
+        bbtools_config = config.tools.get("bbtools", {})
+
+        # Use configured parameters with fallbacks to passed values
+        ploidy = bbtools_config.get("ploidy", 1)
+        clearfilters_enabled = bbtools_config.get("clearfilters", False)
+        clearfilters = "t" if clearfilters_enabled else "f"
+        configured_maf = bbtools_config.get("minallelefraction", 0.0)
+        configured_mapq = bbtools_config.get("minavgmapq", 20)
+        configured_baseq = bbtools_config.get("minquality", 20)
+
+        # Use passed parameters if provided, otherwise use configured values
+        final_maf = (
+            minallelefraction if minallelefraction is not None else configured_maf
+        )
+
+        # When clearfilters is enabled and parameters are None (from runner),
+        # use 0 to truly clear filters instead of config defaults
+        if clearfilters_enabled:
+            final_mapq = mapq_min if mapq_min is not None else 0
+            final_baseq = baseq_min if baseq_min is not None else 0
+        else:
+            final_mapq = mapq_min if mapq_min is not None else configured_mapq
+            final_baseq = baseq_min if baseq_min is not None else configured_baseq
+
         callvariants_cmd = [
             callvariants_path,
             f"in={bam_path}",
             f"ref={reference_path}",
-            f"vcf={output_vcf}",  # Use vcf= for VCF output
-            f"ploidy={config.get_calling_setting('ploidy', 1)}",  # Organism ploidy from config
-            "clearfilters=t",  # Clear all filters to get raw variants
-            f"minallelefraction={minallelefraction}",
-            f"minavgmapq={mapq_min}",
-            f"minquality={baseq_min}",
+            f"vcf={output_vcf}",
+            f"ploidy={ploidy}",
+            f"clearfilters={clearfilters}",
             f"threads={threads}",
         ]
+
+        # Only add quality filter parameters if clearfilters is not enabled
+        # When clearfilters=t, BBTools ignores filters placed after it,
+        # but we want to honor the clearfilters intent to truly clear all filters
+        if not clearfilters_enabled:
+            callvariants_cmd.extend(
+                [
+                    f"minallelefraction={final_maf}",
+                    f"minavgmapq={final_mapq}",
+                    f"minquality={final_baseq}",
+                ]
+            )
+        else:
+            # When clearfilters is enabled, only add explicit non-zero parameters
+            # to allow users to selectively re-enable specific filters after clearfilters
+            if final_maf > 0:
+                callvariants_cmd.append(f"minallelefraction={final_maf}")
+            if final_mapq > 0:
+                callvariants_cmd.append(f"minavgmapq={final_mapq}")
+            if final_baseq > 0:
+                callvariants_cmd.append(f"minquality={final_baseq}")
 
         # Add memory setting if provided
         if bbtools_mem:
@@ -299,11 +349,11 @@ def run_bcftools_pileup(
 
     Executes:
     1. bcftools mpileup -q20 -Q20 -B -a AD,ADF,ADR,DP
-    2. bcftools view -Ou (keeps all sites, not just variants)
-    3. bcftools norm -f <ref> -m -both --atomize -Oz (normalize and compress)
+    2. bcftools view -Oz (keeps all sites, compress to VCF.gz)
 
     This creates candidate sites (pileup) rather than called variants,
-    suitable for downstream ambiguous site detection.
+    suitable for downstream VCF normalization and ambiguous site detection.
+    Normalization is now handled separately in step #4.
 
     Args:
         bam_path: Input BAM file
@@ -335,6 +385,14 @@ def run_bcftools_pileup(
         config = get_config()
         bcftools_config = config.tools.get("bcftools", {})
 
+        # Use configured parameters with fallbacks to passed values
+        configured_mapq = bcftools_config.get("mapq_min", 20)
+        configured_baseq = bcftools_config.get("baseq_min", 20)
+
+        # Use passed parameters if provided, otherwise use configured values
+        final_mapq = mapq_min if mapq_min is not None else configured_mapq
+        final_baseq = baseq_min if baseq_min is not None else configured_baseq
+
         # Build mpileup command using configuration
         bcftools_path = get_tool_path("bcftools")
         mpileup_cmd = [bcftools_path, "mpileup"]
@@ -349,9 +407,9 @@ def run_bcftools_pileup(
                 "--threads",
                 str(threads),
                 "-q",
-                str(mapq_min),  # Minimum mapping quality
+                str(final_mapq),  # Minimum mapping quality
                 "-Q",
-                str(baseq_min),  # Minimum base quality
+                str(final_baseq),  # Minimum base quality
             ]
         )
 
@@ -371,10 +429,6 @@ def run_bcftools_pileup(
         mpileup_args = bcftools_config.get("mpileup_args", [])
         mpileup_cmd.extend(mpileup_args)
 
-        # Add extra mpileup args from config
-        mpileup_extra_args = bcftools_config.get("mpileup_extra_args", [])
-        mpileup_cmd.extend(mpileup_extra_args)
-
         # Add reference and BAM files
         mpileup_cmd.extend(
             [
@@ -384,49 +438,26 @@ def run_bcftools_pileup(
             ]
         )
 
-        # Build view command using configuration (replaces call)
+        # Build view command using configuration (outputs compressed VCF directly)
         view_cmd = [bcftools_path, "view"]
         view_cmd.extend(["--threads", str(threads)])
 
-        # Add view output type from config
-        view_output_type = bcftools_config.get("view_output_type", "-Ou")
+        # Add view output type from config (should be -Oz for compressed VCF)
+        view_output_type = bcftools_config.get("view_output_type", "-Oz")
         view_cmd.append(view_output_type)
+
+        # Add output file directly to view command
+        view_cmd.extend(["-o", str(pileup_vcf)])
 
         # Add view args from config
         view_args = bcftools_config.get("view_args", [])
         view_cmd.extend(view_args)
 
-        # Add extra view args from config
-        view_extra_args = bcftools_config.get("view_extra_args", [])
-        view_cmd.extend(view_extra_args)
-
-        # Build norm command using configuration
-        norm_cmd = [bcftools_path, "norm"]
-        norm_cmd.extend(["--threads", str(threads)])
-
-        # Add reference for normalization
-        norm_cmd.extend(["-f", str(reference_path)])
-
-        # Add norm args from config
-        norm_args = bcftools_config.get("norm_args", ["-m", "-both", "--atomize"])
-        norm_cmd.extend(norm_args)
-
-        # Add norm output type from config
-        norm_output_type = bcftools_config.get("norm_output_type", "-Oz")
-        norm_cmd.append(norm_output_type)
-
-        # Add output file
-        norm_cmd.extend(["-o", str(pileup_vcf)])
-
-        # Add extra norm args from config
-        norm_extra_args = bcftools_config.get("norm_extra_args", [])
-        norm_cmd.extend(norm_extra_args)
-
         logger.info(
-            f"Running bcftools pileup pipeline: {' '.join(mpileup_cmd)} | {' '.join(view_cmd)} | {' '.join(norm_cmd)}"
+            f"Running bcftools pileup pipeline: {' '.join(mpileup_cmd)} | {' '.join(view_cmd)}"
         )
 
-        # Run mpileup | view | norm pipeline
+        # Run mpileup | view pipeline
         mpileup_proc = subprocess.Popen(
             mpileup_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
@@ -434,23 +465,15 @@ def run_bcftools_pileup(
         view_proc = subprocess.Popen(
             view_cmd,
             stdin=mpileup_proc.stdout,
-            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-        )
-
-        norm_proc = subprocess.Popen(
-            norm_cmd, stdin=view_proc.stdout, stderr=subprocess.PIPE, text=True
         )
 
         # Close upstream stdout to allow SIGPIPE
         if mpileup_proc.stdout:
             mpileup_proc.stdout.close()
-        if view_proc.stdout:
-            view_proc.stdout.close()
 
-        # Wait for all processes
-        norm_stderr = norm_proc.communicate()[1]
+        # Wait for both processes
         view_stderr = view_proc.communicate()[1]
         mpileup_stderr = mpileup_proc.communicate()[1]
 
@@ -479,22 +502,9 @@ def run_bcftools_pileup(
                 runtime_seconds=time.time() - start_time,
             )
 
-        if norm_proc.returncode != 0:
-            error_msg = (
-                f"bcftools norm failed (exit {norm_proc.returncode}): {norm_stderr}"
-            )
-            logger.error(error_msg)
-            return VariantCallResult(
-                vcf_path=pileup_vcf,
-                caller=Caller.BCFTOOLS,
-                success=False,
-                error_message=error_msg,
-                runtime_seconds=time.time() - start_time,
-            )
-
         # Verify output VCF was created
         if not pileup_vcf.exists():
-            error_msg = "bcftools norm completed but no VCF output found"
+            error_msg = "bcftools view completed but no VCF output found"
             logger.error(error_msg)
             return VariantCallResult(
                 vcf_path=pileup_vcf,
@@ -531,8 +541,8 @@ def call_variants(
     caller: Caller,
     sample_name: str,
     threads: int = 1,
-    mapq_min: int = 20,
-    baseq_min: int = 20,
+    mapq_min: Optional[int] = None,
+    baseq_min: Optional[int] = None,
     minallelefraction: float = 0.0,
     bbtools_mem: Optional[str] = None,
 ) -> VariantCallResult:

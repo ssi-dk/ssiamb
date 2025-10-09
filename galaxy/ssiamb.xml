@@ -2,7 +2,7 @@
     <description>Count ambiguous sites in bacterial WGS data</description>
     
     <macros>
-        <token name="@TOOL_VERSION@">0.8.0</token>
+        <token name="@TOOL_VERSION@">0.9.0</token>
         <token name="@VERSION_SUFFIX@">0</token>
     </macros>
     
@@ -32,6 +32,11 @@
         #else
             #set $clean_sample = ""
         #end if
+        
+        <!-- 
+            The 'panel' and 'config' subcommands are administrative and not included in this tool wrapper,
+            which focuses on the analysis modes: self, ref, and summarize.
+        -->
         
         ssiamb 
         
@@ -71,6 +76,10 @@
                     --ref-dir '$mode.ref_source.ref_dir'
                 #end if
                 --on-fail '$mode.ref_source.on_fail'
+            #elif $mode.mode_select == "summarize"
+                summarize
+                --vcf '$mode.vcf'
+                --bam '$mode.bam'
             #end if
         #end if
         
@@ -231,22 +240,21 @@
                     </when>
                 </conditional>
             </when>
+            <when value="summarize">
+                <param name="vcf" type="data" format="vcf" label="VCF File" help="VCF file containing variants."/>
+                <param name="bam" type="data" format="bam" label="BAM File" help="BAM file for depth and coverage calculation."/>
+            </when>
         </conditional>
         
         <!-- Sample name -->
-        <param name="sample_name" type="text" optional="true" label="Sample name" 
-               help="Custom sample name (inferred from filenames if not provided)"/>
+        <param name="sample_name" type="text" optional="true" label="Sample Name" help="If not provided, it will be inferred from read filenames."/>
         
         <!-- Analysis Parameters -->
         <section name="analysis" title="Analysis Parameters" expanded="true">
-            <param name="dp_min" type="integer" value="10" min="1" label="Minimum depth" 
-                   help="Minimum depth for ambiguous sites"/>
-            <param name="maf_min" type="float" value="0.1" min="0" max="1" label="Minimum MAF" 
-                   help="Minimum minor allele frequency"/>
-            <param name="dp_cap" type="integer" value="100" min="1" label="Depth cap" 
-                   help="Maximum depth cap for variant analysis"/>
-            <param name="mapq" type="integer" value="30" min="0" label="Minimum MAPQ" 
-                   help="Minimum mapping quality for depth analysis"/>
+            <param name="dp_min" type="integer" value="10" label="Minimum Depth" help="Minimum depth to consider a site for ambiguity analysis."/>
+            <param name="maf_min" type="float" value="0.10" label="Minimum MAF" help="Minimum Minor Allele Frequency to consider a site ambiguous."/>
+            <param name="dp_cap" type="integer" value="100" label="Depth Cap" help="Maximum depth for variant analysis."/>
+            <param name="mapq" type="integer" value="30" label="Minimum Mapping Quality" help="Minimum mapping quality for depth analysis." when="mode.mode_select != 'summarize'"/>
         </section>
         
         <!-- Output Options -->
@@ -266,31 +274,29 @@
         </section>
         
         <!-- Advanced Options -->
-        <section name="advanced" title="Advanced Options" expanded="false">
-            <param name="mapper" type="select" label="Mapper" help="Read mapping tool">
+        <section name="advanced" title="Advanced Parameters" expanded="false">
+            <param name="mapper" type="select" label="Mapper" when="mode.mode_select != 'summarize'">
                 <option value="minimap2" selected="true">minimap2</option>
                 <option value="bwa-mem2">bwa-mem2</option>
             </param>
-            <param name="caller" type="select" label="Variant caller" help="Variant calling tool">
+            <param name="caller" type="select" label="Variant Caller" when="mode.mode_select != 'summarize'">
                 <option value="bbtools" selected="true">BBTools</option>
-                <option value="bcftools">bcftools</option>
+                <option value="bcftools">BCFtools</option>
             </param>
-            <param name="bbtools_mem" type="text" optional="true" label="BBTools memory" 
-                   help="BBTools heap memory (e.g., '4g', '8g')"/>
-            <param name="depth_tool" type="select" label="Depth analysis tool" help="Tool for depth analysis">
-                <option value="mosdepth" selected="true">mosdepth</option>
-                <option value="samtools">samtools</option>
+            <param name="bbtools_mem" type="text" optional="true" label="BBTools Memory" help="e.g., '4g', '8g'" when="mode.mode_select != 'summarize'"/>
+            <param name="depth_tool" type="select" label="Depth Tool" when="mode.mode_select != 'summarize'">
+                <option value="mosdepth" selected="true">Mosdepth</option>
+                <option value="samtools">Samtools</option>
             </param>
-            <param name="require_pass" type="boolean" checked="false" 
-                   label="Require PASS variants" help="Only consider variants that pass caller filters"/>
-            
-            <!-- Logging/QC Options -->
-            <param name="verbose" type="boolean" checked="false" label="Verbose output" 
-                   help="Enable verbose logging"/>
-            <param name="quiet" type="boolean" checked="false" label="Quiet mode" 
-                   help="Suppress non-error output"/>
-            <param name="dry_run" type="boolean" checked="false" label="Dry run" 
-                   help="Show what would be done without executing"/>
+            <param name="require_pass" type="boolean" truevalue="--require-pass" falsevalue="" checked="false" label="Require PASS" help="Only consider variants that pass caller filters."/>
+            <param name="tsv_mode" type="select" label="TSV Output Mode" when="mode.mode_select != 'summarize'">
+                <option value="overwrite" selected="true">Overwrite</option>
+                <option value="append">Append</option>
+                <option value="fail">Fail if exists</option>
+            </param>
+            <param name="verbose" type="boolean" truevalue="--verbose" falsevalue="" checked="false" label="Verbose Output"/>
+            <param name="quiet" type="boolean" truevalue="--quiet" falsevalue="" checked="false" label="Quiet Output"/>
+            <param name="dry_run" type="boolean" truevalue="--dry-run" falsevalue="" checked="false" label="Dry Run"/>
         </section>
     </inputs>
     

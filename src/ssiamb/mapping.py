@@ -231,14 +231,38 @@ def ensure_indexes_self(fasta_path: Path, mapper: Mapper) -> None:
 
 def _build_minimap2_index(fasta_path: Path) -> None:
     """Build minimap2 index (.mmi file)."""
+    config = get_config()
+    minimap2_path = get_tool_path("minimap2")
+
+    # Get indexing configuration
+    index_config = config.tools.get("minimap2_index", {})
+
     index_path = fasta_path.with_suffix(".mmi")
 
-    cmd = [
-        "minimap2",
-        "-d",
-        str(index_path),  # Output index file
-        str(fasta_path),  # Input FASTA
-    ]
+    cmd = [minimap2_path]
+
+    # Add indexing parameters from configuration
+    if index_config.get("dump_index", True):
+        cmd.extend(["-d", str(index_path)])
+
+    # Add k-mer size if configured
+    kmer_size = index_config.get("kmer_size", 15)
+    cmd.extend(["-k", str(kmer_size)])
+
+    # Add window size if configured
+    window_size = index_config.get("window_size", 10)
+    cmd.extend(["-w", str(window_size)])
+
+    # Add split index parameter if configured
+    split_index = index_config.get("split_index", "8G")
+    cmd.extend(["-I", str(split_index)])
+
+    # Add any extra arguments
+    extra_args = index_config.get("extra_args", [])
+    cmd.extend(extra_args)
+
+    # Add input FASTA
+    cmd.append(str(fasta_path))
 
     logger.debug(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -251,8 +275,25 @@ def _build_minimap2_index(fasta_path: Path) -> None:
 
 def _build_bwa_mem2_index(fasta_path: Path) -> None:
     """Build bwa-mem2 index files."""
+    config = get_config()
     bwa_mem2_path = get_tool_path("bwa-mem2")
-    cmd = [bwa_mem2_path, "index", str(fasta_path)]
+
+    # Get indexing configuration
+    index_config = config.tools.get("bwa-mem2_index", {})
+
+    cmd = [bwa_mem2_path, "index"]
+
+    # Add prefix parameter if configured
+    prefix = index_config.get("prefix", "")
+    if prefix:
+        cmd.extend(["-p", str(prefix)])
+
+    # Add any extra arguments
+    extra_args = index_config.get("extra_args", [])
+    cmd.extend(extra_args)
+
+    # Add input FASTA
+    cmd.append(str(fasta_path))
 
     logger.debug(f"Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -376,8 +417,9 @@ def _map_with_minimap2(
     preset = minimap2_config.get("preset", "sr")  # Default to "sr" if not configured
     extra_args = minimap2_config.get("extra_args", [])
 
-    # Create read group string
-    read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:ILLUMINA"
+    # Create read group string using configured platform
+    platform = minimap2_config.get("read_group_platform", "ILLUMINA")
+    read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:{platform}"
 
     # minimap2 command: map to SAM, pipe to samtools for sorting
     minimap2_path = get_tool_path("minimap2")
@@ -385,15 +427,24 @@ def _map_with_minimap2(
         minimap2_path,
         "-x",
         preset,  # Short read preset from config
-        "-a",  # Output alignments (required by spec)
-        "-t",
-        str(threads),  # Threads
-        "-R",
-        read_group,  # Read group
-        str(index_path),  # Index file
-        str(r1_path),  # R1 FASTQ
-        str(r2_path),  # R2 FASTQ
-    ] + extra_args  # Add any extra arguments from config
+    ]
+
+    # Add output alignments flag if configured
+    if minimap2_config.get("output_alignments", True):
+        minimap2_cmd.append("-a")
+
+    minimap2_cmd.extend(
+        [
+            "-t",
+            str(threads),  # Threads
+            "-R",
+            read_group,  # Read group
+            str(index_path),  # Index file
+            str(r1_path),  # R1 FASTQ
+            str(r2_path),  # R2 FASTQ
+        ]
+    )
+    minimap2_cmd.extend(extra_args)  # Add any extra arguments from config
 
     samtools_path = get_tool_path("samtools")
     samtools_cmd = [
@@ -450,13 +501,14 @@ def _map_with_bwa_mem2(
     output_path: Path,
 ) -> None:
     """Map with bwa-mem2 and create sorted BAM."""
-    # Create read group string
-    read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:ILLUMINA"
-
     # Get bwa-mem2 configuration
     config = get_config()
     bwa_mem2_config = config.tools.get("bwa-mem2", {})
     bwa_extra_args = bwa_mem2_config.get("extra_args", [])
+
+    # Create read group string using configured platform
+    platform = bwa_mem2_config.get("read_group_platform", "ILLUMINA")
+    read_group = f"@RG\\tID:{sample_name}\\tSM:{sample_name}\\tPL:{platform}"
 
     # bwa-mem2 command: map to SAM, pipe to samtools for sorting
     bwa_mem2_path = get_tool_path("bwa-mem2")

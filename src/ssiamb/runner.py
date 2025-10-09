@@ -618,6 +618,17 @@ def run_self(plan: RunPlan) -> SummaryRow:
             assert plan.thresholds.baseq_min is not None, "baseq_min threshold not set"
 
             vcf_path = plan.paths.output_dir / f"{plan.sample}.pileup.vcf.gz"
+
+            # Check if clearfilters is enabled for BBTools - if so, don't pass quality thresholds
+            # as they would override the clearfilters setting
+            mapq_param = None
+            baseq_param = None
+            if plan.caller != Caller.BBTOOLS or not config.tools.get("bbtools", {}).get(
+                "clearfilters", False
+            ):
+                mapq_param = plan.thresholds.mapq_min
+                baseq_param = plan.thresholds.baseq_min
+
             variant_result = call_variants(
                 bam_path=final_bam_path,  # Use markdup BAM for both depth and calling
                 reference_path=plan.paths.assembly,
@@ -625,8 +636,8 @@ def run_self(plan: RunPlan) -> SummaryRow:
                 caller=plan.caller,
                 sample_name=plan.sample,
                 threads=plan.threads,
-                mapq_min=plan.thresholds.mapq_min,
-                baseq_min=plan.thresholds.baseq_min,
+                mapq_min=mapq_param,
+                baseq_min=baseq_param,
                 minallelefraction=0.0,  # Get all variants for analysis
                 bbtools_mem=plan.bbtools_mem,
             )

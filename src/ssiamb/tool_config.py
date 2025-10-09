@@ -208,8 +208,54 @@ class ToolConfig:
                     self.config["tools"][tool_name] = {}
                 self.config["tools"][tool_name]["path"] = str(tool_path)
 
+        # Update related indexing and normalization configurations
+        self._update_related_tool_paths(tool_name, str(tool_path))
+
         self.save_config()
         console.print(f"[green]✓[/green] Set {tool_name} path to: {path}")
+
+    def _update_related_tool_paths(self, tool_name: str, tool_path: str) -> None:
+        """Update paths for related indexing and normalization configurations."""
+        # Map main tools to their related configurations
+        related_configs = {
+            "minimap2": ["minimap2_index"],
+            "bwa-mem2": ["bwa-mem2_index"],
+            "bcftools": ["vcf_normalization"],
+        }
+
+        if tool_name in related_configs:
+            for related_config in related_configs[tool_name]:
+                # Ensure the related config exists as a dict
+                if related_config not in self.config["tools"]:
+                    self.config["tools"][related_config] = {}
+                elif not isinstance(self.config["tools"][related_config], dict):
+                    self.config["tools"][related_config] = {}
+
+                # Set the path to match the main tool
+                self.config["tools"][related_config]["path"] = tool_path
+                console.print(
+                    f"[green]✓[/green] Also set {related_config} path to: {tool_path}"
+                )
+
+    def _reset_related_tool_paths(self, tool_name: str) -> None:
+        """Reset paths for related indexing and normalization configurations."""
+        # Map main tools to their related configurations
+        related_configs = {
+            "minimap2": ["minimap2_index"],
+            "bwa-mem2": ["bwa-mem2_index"],
+            "bcftools": ["vcf_normalization"],
+        }
+
+        if tool_name in related_configs:
+            for related_config in related_configs[tool_name]:
+                if related_config in self.config["tools"]:
+                    if isinstance(self.config["tools"][related_config], dict):
+                        self.config["tools"][related_config]["path"] = ""
+                    else:
+                        self.config["tools"][related_config] = ""
+                    console.print(
+                        f"[green]✓[/green] Also reset {related_config} to auto-detection"
+                    )
 
     def reset_tool_config(self, tool_name: Optional[str] = None) -> None:
         """Reset tool configuration to auto-detection."""
@@ -227,6 +273,9 @@ class ToolConfig:
                     self.config["tools"][tool_name]["path"] = ""
             else:
                 self.config["tools"][tool_name] = ""
+
+            # Reset related configurations
+            self._reset_related_tool_paths(tool_name)
             console.print(f"[green]✓[/green] Reset {tool_name} to auto-detection")
         else:
             # Reset all tools
@@ -240,6 +289,8 @@ class ToolConfig:
                         self.config["tools"][tool]["path"] = ""
                 else:
                     self.config["tools"][tool] = ""
+                # Reset related configurations for each tool
+                self._reset_related_tool_paths(tool)
             console.print("[green]✓[/green] Reset all tools to auto-detection")
 
         self.save_config()

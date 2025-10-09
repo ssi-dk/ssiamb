@@ -101,8 +101,6 @@ def run_mosdepth(
     """
     # Get config defaults if parameters not provided
     config = get_config()
-    if mapq_threshold is None:
-        mapq_threshold = config.get_depth_setting("default_mapq_threshold", 30)
     if threads is None:
         threads = config.get_depth_setting("default_threads", 4)
     if not bam_path.exists():
@@ -113,6 +111,10 @@ def run_mosdepth(
 
     # Get mosdepth configuration
     mosdepth_config = config.tools.get("mosdepth", {})
+
+    # Use provided mapq_threshold or fall back to config
+    if mapq_threshold is None:
+        mapq_threshold = mosdepth_config.get("mapq_threshold", 30)
 
     # Construct mosdepth command
     mosdepth_path = get_tool_path("mosdepth")
