@@ -1,5 +1,5 @@
 {% set name = "ssiamb" %}
-{% set version = "0.8.0" %}
+{% set version = "0.9.0" %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +7,7 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/ssiamb-{{ version }}.tar.gz
-  sha256: 9ba9f8919ba3bf6a2ccab10634cd997ef607fd57cade1836f435aed586ee592c
+  sha256: 5339fb118c0f3d4bdec0b54d700fc7d31f433c7d01f68dd29827b919d5a6b396
 
 build:
   number: 0

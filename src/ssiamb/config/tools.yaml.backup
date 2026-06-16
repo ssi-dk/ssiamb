@@ -1,0 +1,71 @@
+# Tool configuration for ssiamb
+# This file contains both tool paths and tool-specific parameters
+# Empty path values mean the tool will be auto-detected from PATH
+
+# Minimap2 short-read mapper
+minimap2:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  preset: "sr"          # Short read preset
+  extra_args: []        # Additional command-line arguments
+
+# BWA-MEM2 alignment tool
+bwa-mem2:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  extra_args: []        # Additional command-line arguments
+
+# BBTools suite configuration
+bbtools:
+  callvariants_path: '' # Path to callvariants.sh (empty = auto-detect)
+  pileup_path: ''       # Path to pileup.sh (empty = auto-detect)
+  variant_caller: "callvariants.sh"
+  extra_args: []
+  heap_floor: "4g"      # Minimum heap memory (floor)
+  heap_cap: "64g"       # Maximum heap memory (cap)
+  heap_percent: 0.8     # Percent of detected RAM to use (~80%)
+
+# BCFtools pileup and normalization workflow
+bcftools:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  mpileup_args: ["-d", "1000"]  # mpileup-specific arguments
+  version_timeout: 5            # Timeout for version check (seconds)
+  # Additional mpileup parameters
+  mpileup_output_type: "-Ou"   # Uncompressed BCF output for piping
+  disable_baq: true             # Disable BAQ computation (-B flag)
+  max_depth: 100000             # Maximum depth for mpileup
+  annotations: "FORMAT/AD,ADF,ADR,DP"  # Format annotations to include
+  # View parameters (replaces call)
+  view_args: []                 # view-specific arguments
+  view_output_type: "-Ou"       # Uncompressed BCF output for piping to norm
+  # Normalization parameters
+  norm_args: ["-m", "-both", "--atomize"]  # Split multiallelics and normalize
+  norm_output_type: "-Oz"       # Compressed VCF output
+  # General extra arguments
+  mpileup_extra_args: []        # Additional mpileup command-line arguments
+  view_extra_args: []           # Additional view command-line arguments
+  norm_extra_args: []           # Additional norm command-line arguments
+
+# BGzip compression tool
+bgzip:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  stdout_compress: true # Compress to stdout (-c flag)
+  extra_args: []        # Additional command-line arguments
+
+# Mosdepth depth calculation
+mosdepth:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  window_size: 500      # Window size for depth calculation
+  skip_per_base: true   # Skip per-base output for efficiency (--no-per-base)
+  extra_args: []        # Additional command-line arguments
+
+# SAMtools suite
+samtools:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  depth_args: ["-a"]    # Include all positions in depth calculation
+  extra_args: []        # Additional command-line arguments (applied to all subcommands)
+
+# Tabix indexing tool
+tabix:
+  path: ''              # Tool path (empty = auto-detect from PATH)
+  vcf_preset: "vcf"     # Preset for VCF files (-p vcf)
+  bed_preset: "bed"     # Preset for BED files (-p bed)
+  extra_args: []        # Additional command-line arguments

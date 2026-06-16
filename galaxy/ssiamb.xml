@@ -7,7 +7,7 @@
     </macros>
     
     <requirements>
-        <requirement type="package" version="@TOOL_VERSION@">ssiamb</requirement>
+        <!-- ssiamb is manually installed - not available in conda yet -->
         <requirement type="package" version="2.28">minimap2</requirement>
         <requirement type="package" version="2.2.1">bwa-mem2</requirement>
         <requirement type="package" version="1.20">samtools</requirement>
@@ -32,11 +32,6 @@
         #else
             #set $clean_sample = ""
         #end if
-        
-        <!-- 
-            The 'panel' and 'config' subcommands are administrative and not included in this tool wrapper,
-            which focuses on the analysis modes: self, ref, and summarize.
-        -->
         
         ssiamb 
         
@@ -76,11 +71,11 @@
                     --ref-dir '$mode.ref_source.ref_dir'
                 #end if
                 --on-fail '$mode.ref_source.on_fail'
-            #elif $mode.mode_select == "summarize"
-                summarize
-                --vcf '$mode.vcf'
-                --bam '$mode.bam'
             #end if
+        #elif $mode.mode_select == "summarize"
+            summarize
+            --vcf '$mode.vcf'
+            --bam '$mode.bam'
         #end if
         
         ## Sample name
@@ -96,7 +91,9 @@
         --dp-min $analysis.dp_min
         --maf-min $analysis.maf_min
         --dp-cap $analysis.dp_cap
-        --mapq $analysis.mapq
+        #if $mode.mode_select != 'summarize'
+            --mapq $analysis.mapq
+        #end if
         
         ## Advanced parameters
         --mapper $advanced.mapper
@@ -131,49 +128,6 @@
         #end if
         
         --tsv-mode overwrite
-        
-        ## Move outputs to expected locations
-        && if [ -f outputs/*_ambiguous_summary.tsv ]; then
-            mv outputs/*_ambiguous_summary.tsv '$summary_tsv'
-        fi
-        
-        #if $outputs.emit_vcf
-            && if [ -f outputs/*.ambiguous.vcf.gz ]; then
-                mv outputs/*.ambiguous.vcf.gz '$vcf_output'
-                mv outputs/*.ambiguous.vcf.gz.tbi '$vcf_output_index'
-            fi
-        #end if
-        
-        #if $outputs.emit_bed
-            && if [ -f outputs/*.ambiguous.bed.gz ]; then
-                mv outputs/*.ambiguous.bed.gz '$bed_output'
-                mv outputs/*.ambiguous.bed.gz.tbi '$bed_output_index'
-            fi
-        #end if
-        
-        #if $outputs.emit_matrix
-            && if [ -f outputs/*.variant_matrix.tsv.gz ]; then
-                mv outputs/*.variant_matrix.tsv.gz '$matrix_output'
-            fi
-        #end if
-        
-        #if $outputs.emit_per_contig
-            && if [ -f outputs/*.per_contig_summary.tsv ]; then
-                mv outputs/*.per_contig_summary.tsv '$per_contig_output'
-            fi
-        #end if
-        
-        #if $outputs.emit_multiqc
-            && if [ -f outputs/*.multiqc.tsv ]; then
-                mv outputs/*.multiqc.tsv '$multiqc_output'
-            fi
-        #end if
-        
-        #if $outputs.emit_provenance
-            && if [ -f outputs/run_provenance.json ]; then
-                mv outputs/run_provenance.json '$provenance_output'
-            fi
-        #end if
     ]]></command>
     
     <inputs>
@@ -182,6 +136,7 @@
             <param name="mode_select" type="select" label="Analysis Mode" help="Choose analysis mode">
                 <option value="self" selected="true">Self-mapping (reads vs assembly)</option>
                 <option value="ref">Reference-mapping (reads vs reference)</option>
+                <option value="summarize">Summarize existing files</option>
             </param>
             
             <!-- Self-mapping mode -->
@@ -302,37 +257,79 @@
     
     <outputs>
         <!-- Always produced -->
-        <data name="summary_tsv" format="tabular" label="${tool.name} on ${on_string}: Summary TSV"/>
+        <data name="summary_tsv" format="tabular" label="${tool.name} on ${on_string}: Summary TSV">
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}_ambiguous_summary.tsv</from_work_dir>
+            #else
+                <from_work_dir>outputs/*_ambiguous_summary.tsv</from_work_dir>
+            #end if
+        </data>
         
         <!-- Optional outputs -->
         <data name="vcf_output" format="vcf_bgzip" label="${tool.name} on ${on_string}: Ambiguous sites VCF">
             <filter>outputs['emit_vcf']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.ambiguous.vcf.gz</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.ambiguous.vcf.gz</from_work_dir>
+            #end if
         </data>
         <data name="vcf_output_index" format="tabix" label="${tool.name} on ${on_string}: VCF index">
             <filter>outputs['emit_vcf']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.ambiguous.vcf.gz.tbi</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.ambiguous.vcf.gz.tbi</from_work_dir>
+            #end if
         </data>
         
         <data name="bed_output" format="bed" label="${tool.name} on ${on_string}: Ambiguous sites BED">
             <filter>outputs['emit_bed']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.ambiguous.bed.gz</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.ambiguous.bed.gz</from_work_dir>
+            #end if
         </data>
         <data name="bed_output_index" format="tabix" label="${tool.name} on ${on_string}: BED index">
             <filter>outputs['emit_bed']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.ambiguous.bed.gz.tbi</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.ambiguous.bed.gz.tbi</from_work_dir>
+            #end if
         </data>
         
         <data name="matrix_output" format="tabular" label="${tool.name} on ${on_string}: Variant matrix">
             <filter>outputs['emit_matrix']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.variant_matrix.tsv.gz</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.variant_matrix.tsv.gz</from_work_dir>
+            #end if
         </data>
         
         <data name="per_contig_output" format="tabular" label="${tool.name} on ${on_string}: Per-contig summary">
             <filter>outputs['emit_per_contig']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.per_contig_summary.tsv</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.per_contig_summary.tsv</from_work_dir>
+            #end if
         </data>
         
         <data name="multiqc_output" format="tabular" label="${tool.name} on ${on_string}: MultiQC metrics">
             <filter>outputs['emit_multiqc']</filter>
+            #if $clean_sample
+                <from_work_dir>outputs/${clean_sample}.multiqc.tsv</from_work_dir>
+            #else
+                <from_work_dir>outputs/*.multiqc.tsv</from_work_dir>
+            #end if
         </data>
         
         <data name="provenance_output" format="json" label="${tool.name} on ${on_string}: Provenance">
             <filter>outputs['emit_provenance']</filter>
+            <from_work_dir>outputs/run_provenance.json</from_work_dir>
         </data>
     </outputs>
     
@@ -389,13 +386,14 @@ by variants with sufficient depth and minor allele frequency.
 
 **Input**
 
-The tool supports two analysis modes:
+The tool supports three analysis modes:
 
 1. **Self-mapping mode**: Maps reads to their own assembly to identify sites where the assembly differs from the sequencing data
 2. **Reference-mapping mode**: Maps reads to a reference genome, which can be specified by:
    - Direct reference file upload
    - Species name lookup in admin reference directory  
    - Bracken species classification file
+3. **Summarize mode**: Re-analyzes existing VCF and BAM files
 
 **Output**
 
