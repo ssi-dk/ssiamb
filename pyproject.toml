@@ -4,51 +4,37 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ssiamb"
-version = "0.9.0"
-description = "SSI Ambiguous Site Detection Tool"
+version = "0.9.1"
+description = "Ambiguous-site counting for reads mapped back to their assembly"
 readme = "README.md"
+requires-python = ">=3.11"
 license = "MIT"
-requires-python = ">=3.12"
 authors = [
-    {name = "SSI Denmark", email = "support@ssi.dk"},
+    { name = "Statens Serum Institut" },
 ]
 keywords = [
     "bioinformatics",
-    "genomics", 
+    "genomics",
     "variant-calling",
-    "mapping",
-    "bacterial-genomics"
+    "bacterial-genomics",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-dependencies = [
-    "typer[all]>=0.9.0",
-    "rich>=13.0.0",
-    "pyyaml>=6.0",
-    "pandas>=2.0.0",
-    "numpy>=1.24.0",
-    "pysam>=0.21.0",
-    "biopython>=1.81",
-    "requests>=2.25.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.5.0",
-    "types-PyYAML",
-    "types-requests",
-    "pandas-stubs",
+    "build>=1.2",
+    "pytest>=8",
+    "ruff>=0.8",
 ]
 
 [project.urls]
@@ -57,94 +43,33 @@ Repository = "https://github.com/ssi-dk/ssiamb"
 Issues = "https://github.com/ssi-dk/ssiamb/issues"
 
 [project.scripts]
-ssiamb = "ssiamb.cli:app"
-
-[tool.hatch.version]
-path = "src/ssiamb/version.py"
+ssiamb = "ssiamb.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ssiamb"]
 
-[tool.hatch.envs.default]
-dependencies = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/AGENTS.md",
+    "/AGENTS-todo.md",
+    "/BIOCONDA_SUBMISSION.md",
+    "/galaxy",
+    "/legacy",
+    "/recipes",
+    "/smoke_test.py",
 ]
-
-[tool.hatch.envs.default.scripts]
-test = "pytest {args:tests}"
-test-cov = "pytest --cov=src/ssiamb --cov-report=term-missing {args:tests}"
-cov = "test-cov"
-
-[tool.hatch.envs.lint]
-detached = true
-dependencies = [
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.5.0",
-]
-
-[tool.hatch.envs.lint.scripts]
-check = [
-    "ruff check .",
-    "black --check --diff .",
-    "mypy src/ssiamb",
-]
-format = [
-    "ruff check --fix .",
-    "black .",
-]
-
-[tool.hatch.envs.docs]
-detached = true
-dependencies = [
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.0.0",
-    "mkdocs-autorefs>=0.5.0",
-    "mkdocstrings[python]>=0.24.0",
-]
-
-[tool.hatch.envs.docs.scripts]
-build = "mkdocs build --clean"
-serve = "mkdocs serve --dev-addr localhost:8000"
-
-[tool.black]
-line-length = 88
-target-version = ['py312']
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py311"
+exclude = ["legacy"]
 
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--verbose",
-]
-
-[tool.coverage.run]
-source = ["src"]
-branch = true
-omit = [
-    "*/tests/*",
-    "*/test_*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-]
+pythonpath = ["src"]
+addopts = ["--strict-config", "--strict-markers", "-ra"]

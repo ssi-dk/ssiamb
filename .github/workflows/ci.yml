@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -14,66 +14,49 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Miniforge
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        miniforge-variant: Miniforge3
-        miniforge-version: latest
-        activate-environment: env
-        environment-file: environment.yml
-        use-mamba: true
-        
-    - name: Configure conda channels
-      shell: bash -l {0}
-      run: |
-        # Remove defaults channel and ensure only conda-forge and bioconda are used
-        conda config --remove channels defaults || true
-        conda config --add channels conda-forge
-        conda config --add channels bioconda
-        conda config --set channel_priority strict
-        conda config --show channels
-        
-    - name: Install package in development mode
-      shell: bash -l {0}
-      run: |
-        pip install -e .
-        pip install types-requests
-        
-    - name: Lint with ruff
-      shell: bash -l {0}
-      run: |
-        ruff check .
-        black --check --diff .
-        mypy src/ssiamb
-        
-    - name: Test with pytest
-      shell: bash -l {0}
-      run: |
-        pytest --cov=src/ssiamb --cov-report=term-missing tests/ -v
-        
-    - name: Run smoke test
-      shell: bash -l {0}
-      run: |
-        python smoke_test.py
+      - uses: actions/checkout@v4
 
-  docs:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        run: pytest
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Smoke test installed CLI
+        run: |
+          ssiamb --version
+          ssiamb self --help
+
+  galaxy-lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install hatch
-    - name: Build docs
-      run: |
-        pip install mkdocs mkdocs-material mkdocs-autorefs 'mkdocstrings[python]'
-        mkdocs build --clean
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Planemo
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install planemo
+
+      - name: Lint Galaxy wrapper
+        run: planemo lint galaxy/ssiamb.xml

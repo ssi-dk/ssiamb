@@ -1,10 +1,3 @@
-"""
-ssiamb - SSI Ambiguous Site Detection Tool
+"""Ambiguous-site counting for reads mapped to their own assembly."""
 
-A tool for identifying ambiguous sites in bacterial genome assemblies
-through mapping and variant calling approaches.
-"""
-
-from .version import __version__
-
-__all__ = ["__version__"]
+__version__ = "0.9.1"

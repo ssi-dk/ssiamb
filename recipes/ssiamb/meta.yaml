@@ -1,76 +1,48 @@
 {% set name = "ssiamb" %}
-{% set version = "0.9.0" %}
+{% set version = "0.9.1" %}
 
 package:
   name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/ssiamb-{{ version }}.tar.gz
-  sha256: 5339fb118c0f3d4bdec0b54d700fc7d31f433c7d01f68dd29827b919d5a6b396
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name }}-{{ version }}.tar.gz
+  sha256: 9add943c268295502c1bcc5299f6939e1baa6eeb945b6638c9a45cb2c5e1c2de
 
 build:
   number: 0
   noarch: python
   script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
   entry_points:
-    - ssiamb = ssiamb.cli:app
+    - ssiamb = ssiamb.cli:main
 
 requirements:
   host:
-    - python >=3.12
+    - python >=3.11
     - pip
     - hatchling
   run:
-    - python >=3.12
-    - typer >=0.9.0
-    - rich >=13.0.0
-    - pyyaml >=6.0
-    - pandas >=2.0.0
-    - numpy >=1.24.0
-    - pysam >=0.21.0
-    - biopython >=1.81
-    - requests >=2.25.0
-    - minimap2 >=2.24
-    - bwa-mem2 >=2.2
-    - samtools >=1.17
-    - bcftools >=1.17
-    - bbmap >=39.0
-    - mosdepth >=0.3.3
-    - bedtools >=2.30
-    - htslib >=1.17
+    - python >=3.11
+    - minimap2
+    - samtools
+    - bbmap
 
 test:
   imports:
     - ssiamb
-    - ssiamb.cli
-    - ssiamb.models
-    - ssiamb.runner
-    - ssiamb.config
-    - ssiamb.tool_config
   commands:
-    - ssiamb --help
     - ssiamb --version
     - ssiamb self --help
-    - ssiamb ref --help
-    - ssiamb summarize --help
-    - ssiamb config --help
-    - ssiamb config list
 
 about:
   home: https://github.com/ssi-dk/ssiamb
-  summary: A tool for counting ambiguous sites in bacterial isolate sequences
+  summary: Ambiguous-site counting for reads mapped back to their assembly
   description: |
-    ssiamb is a command-line tool for counting ambiguous sites in bacterial isolate 
-    sequences by comparing short reads to their assemblies. It supports both 
-    self-mode (reads vs their own assembly) and ref-mode (reads vs reference genome).
-    
-    The tool integrates multiple bioinformatics tools including minimap2/BWA-mem2 
-    for alignment, bcftools/bbtools for variant calling, and mosdepth for depth 
-    calculation to provide comprehensive analysis of sequence ambiguity.
+    ssiamb counts ambiguous SNV sites from trimmed paired-end reads mapped back
+    to their own supplied assembly. It is designed for workflows where read
+    trimming and assembly, for example with Shovill, are performed upstream.
   license: MIT
   license_file: LICENSE
-  doc_url: https://github.com/ssi-dk/ssiamb
   dev_url: https://github.com/ssi-dk/ssiamb
 
 extra:

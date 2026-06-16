@@ -1,130 +1,60 @@
-# -------------------------------
-# Python / Packaging
-# -------------------------------
+# OS/editor files
+.DS_Store
+Thumbs.db
+*~
+.idea/
+.vscode/
+
+# Python caches and packaging output
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Hatchling / builds / wheels / eggs
-dist/
-build/
+*.pyo
+*.pyd
 *.egg-info/
-*.egg
-.eggs/
-pip-wheel-metadata/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+site/
 
-# Virtual environments
+# Local environments
 .venv/
 venv/
 env/
 .env
 .env.*
-.python-version
+!.env.example
 
-# Tool caches
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-.coverage.*
-coverage.xml
-htmlcov/
+# Local-only legacy snapshot retained for reference
+legacy/
+AGENTS*
 
-# IDE / OS
-.vscode/
-.idea/
-*.iml
-.DS_Store
-Thumbs.db
-
-# Logs / temp
-*.log
-*.tmp
+# Runtime outputs
+outputs/
+results/
+work/
 tmp/
-temp/
+*.log
 
-# -------------------------------
-# Project-specific outputs
-# -------------------------------
-
-# CLI results and large bioinformatics artifacts (keep fixtures explicitly later)
-ambiguous_summary.tsv
-*_ambiguous_summary.tsv
-test_*_ambiguous_summary.tsv
-*.run_provenance.json
-*.multiqc.tsv
-*.per_contig_summary.tsv
-*.variant_matrix.tsv
-*.variant_matrix.tsv.gz
-
-# Mapping / calling intermediates & outputs
+# Bioinformatics intermediates and indexes
+*.sam
 *.bam
 *.bai
 *.cram
 *.crai
-*.sam
-
 *.vcf
 *.vcf.gz
-*.tbi
 *.bcf
-*.bcf.csi
-
-# Reference/index files (admin refs and local)
-refs/
-*.fa
-*.fna
-*.fasta
-*.fa.gz
-*.fna.gz
-*.fasta.gz
-*.fai
-*.gzi
+*.tbi
+*.csi
 *.mmi
+*.fai
 *.amb
 *.ann
-*.pac
 *.bwt*
+*.pac
 *.0123
-
-# mosdepth & depth summaries
-*.mosdepth.global.dist.txt
-*.mosdepth.region.dist.txt
-*.mosdepth.summary.txt
-*.per-base.bed.gz
-*.regions.bed.gz
-*.depth.txt
-
-# Other common genomics temps
-*.idx
-*.dict
-*.sai
-*.pileup
-*.tmp.*
-
-# -------------------------------
-# Galaxy / Planemo
-# -------------------------------
-.planemo*
-
-# -------------------------------
-# Conda / Bioconda / Containers
-# -------------------------------
-conda-bld/
-*.conda
-*.tar.bz2
-.mamba/
-.conda/
-
-# -------------------------------
-# LLM agent local notes (do not commit)
-# -------------------------------
-LLM/
-
-# -------------------------------
-# Re-include tiny fixtures for tests/docs
-# -------------------------------
-!fixtures/**
-
-# But exclude large potential test data
-fixtures/potential_data/

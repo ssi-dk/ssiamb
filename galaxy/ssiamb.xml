@@ -1,439 +1,70 @@
-<tool id="ssiamb" name="Ambiguous Sites Counter" version="@TOOL_VERSION@+galaxy@VERSION_SUFFIX@" profile="22.05" license="MIT">
-    <description>Count ambiguous sites in bacterial WGS data</description>
-    
+<tool id="ssiamb_self" name="SSI Ambiguous Sites" version="@TOOL_VERSION@+galaxy@VERSION_SUFFIX@" profile="22.05" license="MIT">
+    <description>count ambiguous SNV sites from reads mapped to a supplied assembly</description>
     <macros>
-        <token name="@TOOL_VERSION@">0.9.0</token>
+        <token name="@TOOL_VERSION@">0.9.1</token>
         <token name="@VERSION_SUFFIX@">0</token>
     </macros>
-    
     <requirements>
-        <!-- ssiamb is manually installed - not available in conda yet -->
-        <requirement type="package" version="2.28">minimap2</requirement>
-        <requirement type="package" version="2.2.1">bwa-mem2</requirement>
-        <requirement type="package" version="1.20">samtools</requirement>
-        <requirement type="package" version="1.20">bcftools</requirement>
-        <requirement type="package" version="39.08">bbmap</requirement>
-        <requirement type="package" version="0.3.8">mosdepth</requirement>
-        <requirement type="package" version="2.31.1">bedtools</requirement>
-        <requirement type="package" version="1.20">htslib</requirement>
+        <requirement type="package" version="@TOOL_VERSION@">ssiamb</requirement>
     </requirements>
-    
     <version_command>ssiamb --version</version_command>
-    
     <command detect_errors="exit_code"><![CDATA[
         #import re
-        
-        ## Create output directory
+        #set $clean_sample = re.sub(r'[^A-Za-z0-9._-]', '_', str($sample_name))
         mkdir -p outputs &&
-        
-        ## Sanitize sample name if provided
-        #if $sample_name
-            #set $clean_sample = re.sub(r'[^A-Za-z0-9._-]', '_', str($sample_name))
-        #else
-            #set $clean_sample = ""
-        #end if
-        
-        ssiamb 
-        
-        ## Global options
-        #if $advanced.verbose
-            --verbose
-        #elif $advanced.quiet
-            --quiet
-        #end if
-        
-        #if $advanced.dry_run
-            --dry-run
-        #end if
-        
-        ## Mode selection
-        #if $mode.mode_select == "self"
-            self
-            --r1 '$mode.r1'
-            --r2 '$mode.r2'
-            --assembly '$mode.assembly'
-        #elif $mode.mode_select == "ref"
-            ref
-            --r1 '$mode.r1'
-            --r2 '$mode.r2'
-            #if $mode.ref_source.ref_type == "reference"
-                --reference '$mode.ref_source.reference_file'
-            #elif $mode.ref_source.ref_type == "species"
-                --species '$mode.ref_source.species_name'
-                #if $mode.ref_source.ref_dir
-                    --ref-dir '$mode.ref_source.ref_dir'
-                #end if
-            #elif $mode.ref_source.ref_type == "bracken"
-                --bracken '$mode.ref_source.bracken_file'
-                --min-bracken-frac $mode.ref_source.min_bracken_frac
-                --min-bracken-reads $mode.ref_source.min_bracken_reads
-                #if $mode.ref_source.ref_dir
-                    --ref-dir '$mode.ref_source.ref_dir'
-                #end if
-                --on-fail '$mode.ref_source.on_fail'
-            #end if
-        #elif $mode.mode_select == "summarize"
-            summarize
-            --vcf '$mode.vcf'
-            --bam '$mode.bam'
-        #end if
-        
-        ## Sample name
-        #if $clean_sample
+        ssiamb self
+            --r1 '$r1'
+            --r2 '$r2'
+            --assembly '$assembly'
             --sample '$clean_sample'
-        #end if
-        
-        ## Output directory
-        --outdir outputs
-        
-        ## Analysis parameters
-        --threads \${GALAXY_SLOTS:-4}
-        --dp-min $analysis.dp_min
-        --maf-min $analysis.maf_min
-        --dp-cap $analysis.dp_cap
-        #if $mode.mode_select != 'summarize'
-            --mapq $analysis.mapq
-        #end if
-        
-        ## Advanced parameters
-        --mapper $advanced.mapper
-        --caller $advanced.caller
-        #if $advanced.bbtools_mem
-            --bbtools-mem '$advanced.bbtools_mem'
-        #end if
-        --depth-tool $advanced.depth_tool
-        
-        #if $advanced.require_pass
-            --require-pass
-        #end if
-        
-        ## Output options
-        #if $outputs.emit_vcf
-            --emit-vcf
-        #end if
-        #if $outputs.emit_bed
-            --emit-bed
-        #end if
-        #if $outputs.emit_matrix
-            --emit-matrix
-        #end if
-        #if $outputs.emit_per_contig
-            --emit-per-contig
-        #end if
-        #if $outputs.emit_multiqc
-            --emit-multiqc
-        #end if
-        #if $outputs.emit_provenance
-            --emit-provenance
-        #end if
-        
-        --tsv-mode overwrite
+            --outdir outputs
+            --threads \${GALAXY_SLOTS:-1}
+            --dp-min '$thresholds.dp_min'
+            --maf-min '$thresholds.maf_min'
+            --dp-cap '$thresholds.dp_cap'
+            #if $advanced.bbtools_mem
+                --bbtools-mem '$advanced.bbtools_mem'
+            #end if
+            #if $advanced.keep_intermediates
+                --keep-intermediates
+            #end if
     ]]></command>
-    
     <inputs>
-        <!-- Mode Selection -->
-        <conditional name="mode">
-            <param name="mode_select" type="select" label="Analysis Mode" help="Choose analysis mode">
-                <option value="self" selected="true">Self-mapping (reads vs assembly)</option>
-                <option value="ref">Reference-mapping (reads vs reference)</option>
-                <option value="summarize">Summarize existing files</option>
-            </param>
-            
-            <!-- Self-mapping mode -->
-            <when value="self">
-                <param name="r1" type="data" format="fastq,fastq.gz,fastqsanger,fastqsanger.gz" 
-                       label="Forward reads (R1)" help="Forward/left reads in FASTQ format"/>
-                <param name="r2" type="data" format="fastq,fastq.gz,fastqsanger,fastqsanger.gz" 
-                       label="Reverse reads (R2)" help="Reverse/right reads in FASTQ format"/>
-                <param name="assembly" type="data" format="fasta,fasta.gz" 
-                       label="Assembly" help="Assembled genome in FASTA format"/>
-            </when>
-            
-            <!-- Reference-mapping mode -->
-            <when value="ref">
-                <param name="r1" type="data" format="fastq,fastq.gz,fastqsanger,fastqsanger.gz" 
-                       label="Forward reads (R1)" help="Forward/left reads in FASTQ format"/>
-                <param name="r2" type="data" format="fastq,fastq.gz,fastqsanger,fastqsanger.gz" 
-                       label="Reverse reads (R2)" help="Reverse/right reads in FASTQ format"/>
-                
-                <conditional name="ref_source">
-                    <param name="ref_type" type="select" label="Reference Source" 
-                           help="How to specify the reference genome">
-                        <option value="reference">Direct reference file</option>
-                        <option value="species">Species name lookup</option>
-                        <option value="bracken">Bracken classification</option>
-                    </param>
-                    
-                    <when value="reference">
-                        <param name="reference_file" type="data" format="fasta,fasta.gz" 
-                               label="Reference genome" help="Reference genome in FASTA format"/>
-                    </when>
-                    
-                    <when value="species">
-                        <param name="species_name" type="text" label="Species name" 
-                               help="Species name for reference lookup (e.g., 'Escherichia coli')"/>
-                        <param name="ref_dir" type="text" optional="true" label="Reference directory" 
-                               help="Path to admin reference directory (optional)"/>
-                    </when>
-                    
-                    <when value="bracken">
-                        <param name="bracken_file" type="data" format="tabular,tsv" 
-                               label="Bracken classification file" help="Bracken species classification output"/>
-                        <param name="min_bracken_frac" type="float" value="0.7" min="0" max="1" 
-                               label="Minimum Bracken abundance fraction" 
-                               help="Minimum abundance fraction for species selection"/>
-                        <param name="min_bracken_reads" type="integer" value="100000" min="0" 
-                               label="Minimum Bracken read count" 
-                               help="Minimum read count for species selection"/>
-                        <param name="ref_dir" type="text" optional="true" label="Reference directory" 
-                               help="Path to admin reference directory (optional)"/>
-                        <param name="on_fail" type="select" label="Action on failure" 
-                               help="What to do if reference resolution fails">
-                            <option value="error" selected="true">Error and exit</option>
-                            <option value="warn">Warn and continue</option>
-                        </param>
-                    </when>
-                </conditional>
-            </when>
-            <when value="summarize">
-                <param name="vcf" type="data" format="vcf" label="VCF File" help="VCF file containing variants."/>
-                <param name="bam" type="data" format="bam" label="BAM File" help="BAM file for depth and coverage calculation."/>
-            </when>
-        </conditional>
-        
-        <!-- Sample name -->
-        <param name="sample_name" type="text" optional="true" label="Sample Name" help="If not provided, it will be inferred from read filenames."/>
-        
-        <!-- Analysis Parameters -->
-        <section name="analysis" title="Analysis Parameters" expanded="true">
-            <param name="dp_min" type="integer" value="10" label="Minimum Depth" help="Minimum depth to consider a site for ambiguity analysis."/>
-            <param name="maf_min" type="float" value="0.10" label="Minimum MAF" help="Minimum Minor Allele Frequency to consider a site ambiguous."/>
-            <param name="dp_cap" type="integer" value="100" label="Depth Cap" help="Maximum depth for variant analysis."/>
-            <param name="mapq" type="integer" value="30" label="Minimum Mapping Quality" help="Minimum mapping quality for depth analysis." when="mode.mode_select != 'summarize'"/>
+        <param name="r1" type="data" format="fastq,fastq.gz,fastqsanger,fastqsanger.gz" label="Forward reads (R1)" help="Trimmed forward reads."/>
+        <param name="r2" type="data" format="fastq,fastq.gz,fastqsanger,fastqsanger.gz" label="Reverse reads (R2)" help="Trimmed reverse reads."/>
+        <param name="assembly" type="data" format="fasta,fasta.gz" label="Shovill assembly" help="Assembly produced upstream, for example by Shovill."/>
+        <param name="sample_name" type="text" label="Sample name" help="Used in reports and output filenames."/>
+        <section name="thresholds" title="Thresholds" expanded="true">
+            <param name="dp_min" type="integer" value="10" min="1" label="Minimum depth"/>
+            <param name="maf_min" type="float" value="0.10" min="0" max="0.5" label="Minimum minor allele frequency"/>
+            <param name="dp_cap" type="integer" value="100" min="1" label="Depth cap for matrix/reporting"/>
         </section>
-        
-        <!-- Output Options -->
-        <section name="outputs" title="Output Options" expanded="false">
-            <param name="emit_vcf" type="boolean" checked="false" 
-                   label="Emit VCF file" help="Generate VCF file with ambiguous sites"/>
-            <param name="emit_bed" type="boolean" checked="false" 
-                   label="Emit BED file" help="Generate BED file with ambiguous sites"/>
-            <param name="emit_matrix" type="boolean" checked="false" 
-                   label="Emit variant matrix" help="Generate variant matrix in TSV format"/>
-            <param name="emit_per_contig" type="boolean" checked="false" 
-                   label="Emit per-contig summary" help="Generate per-contig summary statistics"/>
-            <param name="emit_multiqc" type="boolean" checked="false" 
-                   label="Emit MultiQC metrics" help="Generate MultiQC-compatible metrics"/>
-            <param name="emit_provenance" type="boolean" checked="false" 
-                   label="Emit provenance" help="Generate JSON provenance file"/>
-        </section>
-        
-        <!-- Advanced Options -->
-        <section name="advanced" title="Advanced Parameters" expanded="false">
-            <param name="mapper" type="select" label="Mapper" when="mode.mode_select != 'summarize'">
-                <option value="minimap2" selected="true">minimap2</option>
-                <option value="bwa-mem2">bwa-mem2</option>
-            </param>
-            <param name="caller" type="select" label="Variant Caller" when="mode.mode_select != 'summarize'">
-                <option value="bbtools" selected="true">BBTools</option>
-                <option value="bcftools">BCFtools</option>
-            </param>
-            <param name="bbtools_mem" type="text" optional="true" label="BBTools Memory" help="e.g., '4g', '8g'" when="mode.mode_select != 'summarize'"/>
-            <param name="depth_tool" type="select" label="Depth Tool" when="mode.mode_select != 'summarize'">
-                <option value="mosdepth" selected="true">Mosdepth</option>
-                <option value="samtools">Samtools</option>
-            </param>
-            <param name="require_pass" type="boolean" truevalue="--require-pass" falsevalue="" checked="false" label="Require PASS" help="Only consider variants that pass caller filters."/>
-            <param name="tsv_mode" type="select" label="TSV Output Mode" when="mode.mode_select != 'summarize'">
-                <option value="overwrite" selected="true">Overwrite</option>
-                <option value="append">Append</option>
-                <option value="fail">Fail if exists</option>
-            </param>
-            <param name="verbose" type="boolean" truevalue="--verbose" falsevalue="" checked="false" label="Verbose Output"/>
-            <param name="quiet" type="boolean" truevalue="--quiet" falsevalue="" checked="false" label="Quiet Output"/>
-            <param name="dry_run" type="boolean" truevalue="--dry-run" falsevalue="" checked="false" label="Dry Run"/>
+        <section name="advanced" title="Advanced options" expanded="false">
+            <param name="bbtools_mem" type="text" optional="true" label="BBTools heap size" help="Optional value without -Xmx prefix, for example 4g."/>
+            <param name="keep_intermediates" type="boolean" checked="false" label="Keep sorted BAM intermediate"/>
         </section>
     </inputs>
-    
     <outputs>
-        <!-- Always produced -->
-        <data name="summary_tsv" format="tabular" label="${tool.name} on ${on_string}: Summary TSV">
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}_ambiguous_summary.tsv</from_work_dir>
-            #else
-                <from_work_dir>outputs/*_ambiguous_summary.tsv</from_work_dir>
-            #end if
+        <data name="summary" format="tabular" label="${tool.name} on ${on_string}: summary">
+            <from_work_dir>outputs/*.summary.tsv</from_work_dir>
         </data>
-        
-        <!-- Optional outputs -->
-        <data name="vcf_output" format="vcf_bgzip" label="${tool.name} on ${on_string}: Ambiguous sites VCF">
-            <filter>outputs['emit_vcf']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.ambiguous.vcf.gz</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.ambiguous.vcf.gz</from_work_dir>
-            #end if
+        <data name="loci" format="tabular" label="${tool.name} on ${on_string}: loci">
+            <from_work_dir>outputs/*.loci.tsv</from_work_dir>
         </data>
-        <data name="vcf_output_index" format="tabix" label="${tool.name} on ${on_string}: VCF index">
-            <filter>outputs['emit_vcf']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.ambiguous.vcf.gz.tbi</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.ambiguous.vcf.gz.tbi</from_work_dir>
-            #end if
+        <data name="matrix" format="tabular" label="${tool.name} on ${on_string}: matrix">
+            <from_work_dir>outputs/*.matrix.tsv</from_work_dir>
         </data>
-        
-        <data name="bed_output" format="bed" label="${tool.name} on ${on_string}: Ambiguous sites BED">
-            <filter>outputs['emit_bed']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.ambiguous.bed.gz</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.ambiguous.bed.gz</from_work_dir>
-            #end if
+        <data name="variants" format="vcf" label="${tool.name} on ${on_string}: variants">
+            <from_work_dir>outputs/*.variants.vcf</from_work_dir>
         </data>
-        <data name="bed_output_index" format="tabix" label="${tool.name} on ${on_string}: BED index">
-            <filter>outputs['emit_bed']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.ambiguous.bed.gz.tbi</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.ambiguous.bed.gz.tbi</from_work_dir>
-            #end if
-        </data>
-        
-        <data name="matrix_output" format="tabular" label="${tool.name} on ${on_string}: Variant matrix">
-            <filter>outputs['emit_matrix']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.variant_matrix.tsv.gz</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.variant_matrix.tsv.gz</from_work_dir>
-            #end if
-        </data>
-        
-        <data name="per_contig_output" format="tabular" label="${tool.name} on ${on_string}: Per-contig summary">
-            <filter>outputs['emit_per_contig']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.per_contig_summary.tsv</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.per_contig_summary.tsv</from_work_dir>
-            #end if
-        </data>
-        
-        <data name="multiqc_output" format="tabular" label="${tool.name} on ${on_string}: MultiQC metrics">
-            <filter>outputs['emit_multiqc']</filter>
-            #if $clean_sample
-                <from_work_dir>outputs/${clean_sample}.multiqc.tsv</from_work_dir>
-            #else
-                <from_work_dir>outputs/*.multiqc.tsv</from_work_dir>
-            #end if
-        </data>
-        
-        <data name="provenance_output" format="json" label="${tool.name} on ${on_string}: Provenance">
-            <filter>outputs['emit_provenance']</filter>
-            <from_work_dir>outputs/run_provenance.json</from_work_dir>
+        <data name="provenance" format="json" label="${tool.name} on ${on_string}: provenance">
+            <from_work_dir>outputs/*.provenance.json</from_work_dir>
         </data>
     </outputs>
-    
-    <tests>
-        <test expect_num_outputs="1">
-            <conditional name="mode">
-                <param name="mode_select" value="self"/>
-                <param name="r1" value="test_R1.fastq"/>
-                <param name="r2" value="test_R2.fastq"/>
-                <param name="assembly" value="test_assembly.fasta"/>
-            </conditional>
-            <param name="sample_name" value="test"/>
-            <section name="analysis">
-                <param name="dp_min" value="10"/>
-                <param name="maf_min" value="0.1"/>
-                <param name="dp_cap" value="100"/>
-                <param name="mapq" value="30"/>
-            </section>
-            <section name="outputs">
-                <param name="emit_vcf" value="false"/>
-                <param name="emit_bed" value="false"/>
-                <param name="emit_matrix" value="false"/>
-                <param name="emit_per_contig" value="false"/>
-                <param name="emit_multiqc" value="false"/>
-                <param name="emit_provenance" value="false"/>
-            </section>
-            <section name="advanced">
-                <param name="mapper" value="minimap2"/>
-                <param name="caller" value="bbtools"/>
-                <param name="depth_tool" value="mosdepth"/>
-                <param name="require_pass" value="false"/>
-                <param name="verbose" value="false"/>
-                <param name="quiet" value="false"/>
-                <param name="dry_run" value="false"/>
-            </section>
-            <output name="summary_tsv">
-                <assert_contents>
-                    <has_text text="sample"/>
-                    <has_text text="ambiguous_snv_count"/>
-                    <has_text text="callable_bases"/>
-                    <has_text text="test"/>
-                    <has_n_lines n="2"/>
-                </assert_contents>
-            </output>
-        </test>
-    </tests>
-    
     <help><![CDATA[
-**What it does**
-
-The Ambiguous Sites Counter (ssiamb) identifies ambiguous sites in bacterial whole genome sequencing data. 
-Ambiguous sites are genomic positions where the assembly may not represent the true sequence, indicated 
-by variants with sufficient depth and minor allele frequency.
-
-**Input**
-
-The tool supports three analysis modes:
-
-1. **Self-mapping mode**: Maps reads to their own assembly to identify sites where the assembly differs from the sequencing data
-2. **Reference-mapping mode**: Maps reads to a reference genome, which can be specified by:
-   - Direct reference file upload
-   - Species name lookup in admin reference directory  
-   - Bracken species classification file
-3. **Summarize mode**: Re-analyzes existing VCF and BAM files
-
-**Output**
-
-The tool always produces a summary TSV file with ambiguous site counts and quality metrics.
-
-Optional outputs include:
-- VCF file with ambiguous variant sites
-- BED file with ambiguous site coordinates  
-- Variant matrix with depth/MAF distributions
-- Per-contig summary statistics
-- MultiQC-compatible metrics
-- JSON provenance information
-
-**Parameters**
-
-- **Minimum depth**: Sites must have at least this read depth (default: 10)
-- **Minimum MAF**: Sites must have at least this minor allele frequency (default: 0.1)  
-- **Depth cap**: Maximum depth considered for analysis (default: 100)
-- **Minimum MAPQ**: Minimum mapping quality for depth calculations (default: 30)
-
-**Resource Requirements**
-
-- **CPU**: 4 threads (default)
-- **Memory**: 16 GB (default)  
-- **Runtime**: ~2 hours for typical bacterial genome
-
-**More Information**
-
-For detailed documentation, visit: https://github.com/ssi-dk/ssiamb
+`ssiamb` expects trimmed paired-end reads and a supplied assembly. It maps the
+reads back to the assembly, calls variants with BBTools, groups same-position
+VCF records, and counts ambiguous SNV loci using depth and minor allele
+frequency thresholds.
     ]]></help>
-    
-    <citations>
-        <citation type="bibtex">
-            @software{ssiamb,
-                title={Ambiguous Sites Counter (ssiamb)},
-                author={Povilas Matusevicius},
-                year={2025},
-                url={https://github.com/ssi-dk/ssiamb},
-                note={Version @TOOL_VERSION@}
-            }
-        </citation>
-    </citations>
 </tool>
