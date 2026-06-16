@@ -1,12 +1,10 @@
-<tool id="ssiamb_self" name="SSI Ambiguous Sites" version="@TOOL_VERSION@+galaxy@VERSION_SUFFIX@" profile="22.05" license="MIT">
+<tool id="ssiamb_self" name="SSI Ambiguous Sites" version="@TOOL_VERSION@+galaxy@VERSION_SUFFIX@" profile="@PROFILE@" license="MIT">
     <description>count ambiguous SNV sites from reads mapped to a supplied assembly</description>
     <macros>
-        <token name="@TOOL_VERSION@">0.9.1</token>
-        <token name="@VERSION_SUFFIX@">0</token>
+        <import>macros.xml</import>
     </macros>
-    <requirements>
-        <requirement type="package" version="@TOOL_VERSION@">ssiamb</requirement>
-    </requirements>
+    <expand macro="creator"/>
+    <expand macro="requirements"/>
     <version_command>ssiamb --version</version_command>
     <command detect_errors="exit_code"><![CDATA[
         #import re
@@ -45,26 +43,36 @@
         </section>
     </inputs>
     <outputs>
-        <data name="summary" format="tabular" label="${tool.name} on ${on_string}: summary">
-            <from_work_dir>outputs/*.summary.tsv</from_work_dir>
-        </data>
-        <data name="loci" format="tabular" label="${tool.name} on ${on_string}: loci">
-            <from_work_dir>outputs/*.loci.tsv</from_work_dir>
-        </data>
-        <data name="matrix" format="tabular" label="${tool.name} on ${on_string}: matrix">
-            <from_work_dir>outputs/*.matrix.tsv</from_work_dir>
-        </data>
-        <data name="variants" format="vcf" label="${tool.name} on ${on_string}: variants">
-            <from_work_dir>outputs/*.variants.vcf</from_work_dir>
-        </data>
-        <data name="provenance" format="json" label="${tool.name} on ${on_string}: provenance">
-            <from_work_dir>outputs/*.provenance.json</from_work_dir>
-        </data>
+        <data name="summary" format="tabular" label="${tool.name} on ${on_string}: summary" from_work_dir="outputs/*.summary.tsv"/>
+        <data name="loci" format="tabular" label="${tool.name} on ${on_string}: loci" from_work_dir="outputs/*.loci.tsv"/>
+        <data name="matrix" format="tabular" label="${tool.name} on ${on_string}: matrix" from_work_dir="outputs/*.matrix.tsv"/>
+        <data name="variants" format="vcf" label="${tool.name} on ${on_string}: variants" from_work_dir="outputs/*.variants.vcf"/>
+        <data name="provenance" format="json" label="${tool.name} on ${on_string}: provenance" from_work_dir="outputs/*.provenance.json"/>
     </outputs>
+    <tests>
+        <test expect_num_outputs="5">
+            <param name="r1" value="tiny_R1.fastq"/>
+            <param name="r2" value="tiny_R2.fastq"/>
+            <param name="assembly" value="tiny_assembly.fasta"/>
+            <param name="sample_name" value="tiny"/>
+            <section name="thresholds">
+                <param name="dp_min" value="1"/>
+                <param name="maf_min" value="0.10"/>
+                <param name="dp_cap" value="100"/>
+            </section>
+            <output name="summary">
+                <assert_contents>
+                    <has_text text="sample	ambiguous_sites	dp_min	maf_min"/>
+                    <has_text text="tiny"/>
+                </assert_contents>
+            </output>
+        </test>
+    </tests>
     <help><![CDATA[
 `ssiamb` expects trimmed paired-end reads and a supplied assembly. It maps the
 reads back to the assembly, calls variants with BBTools, groups same-position
 VCF records, and counts ambiguous SNV loci using depth and minor allele
 frequency thresholds.
     ]]></help>
+    <expand macro="citations"/>
 </tool>

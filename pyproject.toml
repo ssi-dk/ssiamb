@@ -7,7 +7,7 @@ name = "ssiamb"
 version = "0.9.1"
 description = "Ambiguous-site counting for reads mapped back to their assembly"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.15"
 license = "MIT"
 authors = [
     { name = "Statens Serum Institut" },
@@ -26,13 +26,16 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = []
 
 [project.optional-dependencies]
 dev = [
+    "black>=26",
     "build>=1.2",
+    "mypy>=2",
     "pytest>=8",
     "ruff>=0.8",
 ]
@@ -67,6 +70,19 @@ exclude = ["legacy"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+extend-exclude = '''
+/(legacy|dist|build|site)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src", "tests", "smoke_test.py"]
+strict = true
+exclude = ["legacy", "dist", "build", "site"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

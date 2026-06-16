@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ssiamb.ambiguity import matrix_counts, summarize_records
+from ssiamb.models import AmbiguityResult
 from ssiamb.vcf import read_vcf
 
 
@@ -22,7 +23,7 @@ def write_vcf(tmp_path: Path, body: str) -> Path:
     return path
 
 
-def summarize(tmp_path: Path, body: str):
+def summarize(tmp_path: Path, body: str) -> AmbiguityResult:
     return summarize_records(read_vcf(write_vcf(tmp_path, body)), sample="S")
 
 

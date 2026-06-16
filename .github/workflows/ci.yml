@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - uses: actions/checkout@v4
@@ -30,8 +30,10 @@ jobs:
 
       - name: Lint
         run: |
+          black --check src tests smoke_test.py
           ruff check .
           ruff format --check .
+          mypy
 
       - name: Test
         run: pytest

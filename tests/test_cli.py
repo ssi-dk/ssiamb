@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from ssiamb.cli import main
 from ssiamb.pipeline import output_paths, safe_sample_name
 
 
-def test_help(capsys) -> None:
+def test_help(capsys: Any) -> None:
     try:
         main(["--help"])
     except SystemExit as exc:
