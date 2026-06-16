@@ -61,4 +61,6 @@ jobs:
           python -m pip install planemo
 
       - name: Lint Galaxy wrapper
-        run: planemo lint galaxy/ssiamb.xml
+        run: |
+          planemo lint galaxy/ssiamb.xml
+          planemo shed_lint --tools

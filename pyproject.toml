@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ssiamb"
-version = "0.9.1"
+version = "1.0.0"
 description = "Ambiguous-site counting for reads mapped back to their assembly"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"

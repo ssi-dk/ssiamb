@@ -1,0 +1,23 @@
+name: ssiamb
+description: Count ambiguous SNV sites from reads mapped back to their assembly.
+long_description: |
+  ssiamb counts ambiguous SNV sites from trimmed paired-end reads mapped back to
+  their own supplied assembly. It is designed for workflows where trimming and
+  assembly, for example with Shovill, are performed upstream.
+homepage_url: https://github.com/ssi-dk/ssiamb
+remote_repository_url: https://github.com/ssi-dk/ssiamb
+type: unrestricted
+categories:
+  - Variant Analysis
+include:
+  - source: galaxy/ssiamb.xml
+    destination: ssiamb.xml
+  - source: galaxy/macros.xml
+    destination: macros.xml
+  - source: galaxy/test-data/**
+    destination: test-data/
+    strip_components: 2
+  - source: README.md
+    destination: README.md
+  - source: LICENSE
+    destination: LICENSE
