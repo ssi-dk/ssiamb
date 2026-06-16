@@ -62,7 +62,10 @@
             </section>
             <output name="summary">
                 <assert_contents>
-                    <has_text text="sample	ambiguous_sites	dp_min	maf_min"/>
+                    <has_text text="sample"/>
+                    <has_text text="ambiguous_sites"/>
+                    <has_text text="dp_min"/>
+                    <has_text text="maf_min"/>
                     <has_text text="tiny"/>
                 </assert_contents>
             </output>

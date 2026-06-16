@@ -26,6 +26,7 @@ requirements:
     - minimap2
     - samtools
     - bbmap
+    - openjdk
 
 test:
   imports:

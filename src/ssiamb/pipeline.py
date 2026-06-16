@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .ambiguity import summarize_records
 from .reports import write_loci, write_matrix, write_provenance, write_summary
-from .vcf import read_vcf
+from .vcf import VcfParseError, read_vcf
 
 
 class PipelineError(RuntimeError):
@@ -232,13 +232,16 @@ def run_self(
         bbtools_mem=bbtools_mem,
     )
 
-    result = summarize_records(
-        read_vcf(paths.vcf),
-        sample=sample,
-        dp_min=dp_min,
-        maf_min=maf_min,
-        dp_cap=dp_cap,
-    )
+    try:
+        result = summarize_records(
+            read_vcf(paths.vcf),
+            sample=sample,
+            dp_min=dp_min,
+            maf_min=maf_min,
+            dp_cap=dp_cap,
+        )
+    except VcfParseError as exc:
+        raise PipelineError(f"Failed to parse callvariants VCF: {exc}") from exc
     write_summary(paths.summary, result, r1=r1, r2=r2, assembly=assembly)
     write_loci(paths.loci, result)
     write_matrix(paths.matrix, result)
