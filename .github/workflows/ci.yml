@@ -63,4 +63,4 @@ jobs:
       - name: Lint Galaxy wrapper
         run: |
           planemo lint galaxy/ssiamb.xml
-          planemo shed_lint --tools
+          planemo shed_lint --tools --fail_level error

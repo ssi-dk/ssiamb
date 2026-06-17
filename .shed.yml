@@ -5,7 +5,8 @@ long_description: |
   their own supplied assembly. It is designed for workflows where trimming and
   assembly, for example with Shovill, are performed upstream.
 homepage_url: https://github.com/ssi-dk/ssiamb
-remote_repository_url: https://github.com/ssi-dk/ssiamb
+remote_repository_url: https://github.com/galaxyproject/tools-iuc/tree/master/tools/ssiamb
+owner: povilasmat
 type: unrestricted
 categories:
   - Variant Analysis
